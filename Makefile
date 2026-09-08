@@ -2,7 +2,7 @@
 # Usage: make <target>
 
 .PHONY: help setup-backend setup-frontend test-backend test-frontend \
-        build deploy seed reset-resources lint type-check clean
+        validate build deploy destroy seed reset-resources lint type-check clean
 
 help:
 	@echo ""
@@ -14,8 +14,10 @@ help:
 	@echo "  make test-frontend      Run frontend unit tests"
 	@echo "  make lint               Run all linters"
 	@echo "  make type-check         Run mypy + tsc"
-	@echo "  make build              sam build (Lambda + Layer)"
-	@echo "  make deploy             sam deploy (guided first time)"
+	@echo "  make validate           Validate infrastructure template locally"
+	@echo "  make build              Build AWS SAM serverless artifacts"
+	@echo "  make deploy             Deploy stack via scripts/deploy.sh"
+	@echo "  make destroy            Tear down stack via scripts/destroy.sh"
 	@echo "  make seed               Seed DynamoDB with 4 virtual resources"
 	@echo "  make reset-resources    Reset all resources to HEALTHY"
 	@echo "  make clean              Remove build artifacts"
@@ -46,11 +48,17 @@ type-check:
 	cd backend && .venv/bin/mypy app/
 	cd frontend && npm run type-check
 
-build:
-	cd infrastructure/sam && sam build
+validate:
+	./scripts/validate.sh infrastructure/template.yaml
 
-deploy: build
-	cd infrastructure/sam && sam deploy
+build:
+	sam build -t infrastructure/template.yaml
+
+deploy:
+	./scripts/deploy.sh
+
+destroy:
+	./scripts/destroy.sh
 
 seed:
 	cd backend && .venv/bin/python ../scripts/seed_data.py
@@ -59,7 +67,7 @@ reset-resources:
 	cd backend && .venv/bin/python ../scripts/reset_resources.py
 
 clean:
-	rm -rf infrastructure/sam/.aws-sam
+	rm -rf .aws-sam infrastructure/sam/.aws-sam
 	rm -rf frontend/dist
 	rm -rf backend/.venv
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

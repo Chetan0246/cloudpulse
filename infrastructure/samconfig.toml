@@ -1,0 +1,18 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "cloudpulse-dev"
+region = "ap-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+disable_rollback = false
+
+[default.build.parameters]
+template_file = "template.yaml"
+use_container = false
+parallel = true
+
+[default.deploy.parameters]
+template_file = "template.yaml"
+s3_prefix = "cloudpulse"

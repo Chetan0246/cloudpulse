@@ -1,9 +1,22 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  CloudPulse — Autonomous Cloud Reliability and Self-Healing Simulator (SAM Subdirectory Template)
+  CloudPulse — Autonomous Cloud Reliability and Self-Healing Simulator
   Course: BCSE355L – Cloud Architecture Design | Fall 2026-2027
 
+  Foundation Serverless Architecture:
+  - API Gateway HTTP API + FastAPI Lambda (Mangum)
+  - DynamoDB (PAY_PER_REQUEST, Standard table class)
+  - S3 (Private by default, optional public website toggle)
+  - CloudWatch (7-day log retention, custom metrics, threshold alarms)
+  - EventBridge (Scheduled heartbeat + Alarm state change routing)
+  - SNS (Notification topic + optional email subscription)
+  - SQS (Recovery DLQ)
+  - IAM (Least-privilege role per Lambda function)
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Global Configuration
+# ──────────────────────────────────────────────────────────────────────────────
 Globals:
   Function:
     Runtime: python3.12
@@ -27,17 +40,23 @@ Globals:
       Course: BCSE355L
       Environment: !Ref Environment
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Parameters
+# ──────────────────────────────────────────────────────────────────────────────
 Parameters:
   Environment:
     Type: String
     Default: dev
-    AllowedValues: [dev, test, prod]
+    AllowedValues:
+      - dev
+      - test
+      - prod
     Description: Deployment target environment.
 
   NotificationEmail:
     Type: String
     Default: ""
-    Description: Optional email address for SNS alerts.
+    Description: Optional email address for SNS failure/recovery notifications. Leave blank to skip.
 
   CorsAllowedOrigins:
     Type: String
@@ -47,37 +66,57 @@ Parameters:
   CloudWatchNamespace:
     Type: String
     Default: CloudPulse
-    Description: CloudWatch metrics namespace.
+    Description: Custom CloudWatch metrics namespace for simulated resources.
 
   LogLevel:
     Type: String
     Default: INFO
-    AllowedValues: [DEBUG, INFO, WARNING, ERROR]
+    AllowedValues:
+      - DEBUG
+      - INFO
+      - WARNING
+      - ERROR
     Description: Application logging verbosity.
 
   EnablePublicFrontendBucket:
     Type: String
     Default: "false"
-    AllowedValues: ["true", "false"]
-    Description: Whether to enable public S3 website hosting.
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: >
+      Keep S3 private by default (false). Set to "true" only if directly serving
+      the React SPA via S3 static website hosting for demonstration.
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Conditions
+# ──────────────────────────────────────────────────────────────────────────────
 Conditions:
   CreateEmailSubscription: !Not [!Equals [!Ref NotificationEmail, ""]]
   IsPublicFrontendEnabled: !Equals [!Ref EnablePublicFrontendBucket, "true"]
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Resources
+# ──────────────────────────────────────────────────────────────────────────────
 Resources:
+
+  # ── Lambda Layer: Shared Core & Dependencies ──────────────────────────────
   CloudPulseLayer:
     Type: AWS::Serverless::LayerVersion
     Properties:
       LayerName: !Sub cloudpulse-shared-layer-${Environment}
-      Description: Shared Python models, repositories, and dependencies
-      ContentUri: ../../backend
-      CompatibleRuntimes: [python3.12]
-      CompatibleArchitectures: [arm64, x86_64]
+      Description: Shared Python models, repositories, and dependencies for CloudPulse
+      ContentUri: ../backend
+      CompatibleRuntimes:
+        - python3.12
+      CompatibleArchitectures:
+        - arm64
+        - x86_64
     Metadata:
       BuildMethod: python3.12
       BuildArchitecture: arm64
 
+  # ── DynamoDB: Resources Table ─────────────────────────────────────────────
   ResourcesTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -95,6 +134,7 @@ Resources:
         - Key: Project
           Value: CloudPulse
 
+  # ── DynamoDB: Incidents Table ─────────────────────────────────────────────
   IncidentsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -121,6 +161,7 @@ Resources:
         - Key: Project
           Value: CloudPulse
 
+  # ── SNS: Notifications Topic ──────────────────────────────────────────────
   NotificationsTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -138,6 +179,7 @@ Resources:
       Protocol: email
       Endpoint: !Ref NotificationEmail
 
+  # ── SQS: Recovery Dead Letter Queue ───────────────────────────────────────
   RecoveryDLQ:
     Type: AWS::SQS::Queue
     Properties:
@@ -147,6 +189,7 @@ Resources:
         - Key: Project
           Value: CloudPulse
 
+  # ── API Gateway: HTTP API ─────────────────────────────────────────────────
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
@@ -171,6 +214,7 @@ Resources:
           "protocol":"$context.protocol","responseLength":"$context.responseLength",
           "integrationLatency":"$context.integrationLatency"}
 
+  # ── CloudWatch: Explicit Log Groups with Short Retention ──────────────────
   ApiLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -195,12 +239,13 @@ Resources:
       LogGroupName: !Sub /aws/apigateway/cloudpulse-${Environment}
       RetentionInDays: 7
 
+  # ── Lambda: API Function (FastAPI + Mangum) ───────────────────────────────
   ApiFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub cloudpulse-api-${Environment}
-      Description: FastAPI API Gateway handler
-      CodeUri: ../../lambda/api
+      Description: FastAPI API Gateway handler for CloudPulse resources and simulation control
+      CodeUri: ../lambda/api
       Handler: handler.handler
       Role: !GetAtt ApiFunctionRole.Arn
       Timeout: 30
@@ -227,12 +272,13 @@ Resources:
             Path: /health
             Method: GET
 
+  # ── Lambda: Simulator Function ────────────────────────────────────────────
   SimulatorFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub cloudpulse-simulator-${Environment}
-      Description: Scheduled virtual resource metric simulator
-      CodeUri: ../../lambda/simulator
+      Description: Scheduled virtual resource metric simulator and CloudWatch publisher
+      CodeUri: ../lambda/simulator
       Handler: handler.handler
       Role: !GetAtt SimulatorFunctionRole.Arn
       Timeout: 60
@@ -245,12 +291,13 @@ Resources:
             Description: Periodic simulator trigger
             Enabled: true
 
+  # ── Lambda: Recovery Function ─────────────────────────────────────────────
   RecoveryFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub cloudpulse-recovery-${Environment}
-      Description: Event-driven recovery handler
-      CodeUri: ../../lambda/recovery
+      Description: Event-driven automated recovery handler for CloudPulse incidents
+      CodeUri: ../lambda/recovery
       Handler: handler.handler
       Role: !GetAtt RecoveryFunctionRole.Arn
       Timeout: 60
@@ -283,11 +330,12 @@ Resources:
               detail-type:
                 - FailureInjected
 
+  # ── CloudWatch Alarms: Failure Detection ──────────────────────────────────
   AlarmVM001HighCPU:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub cloudpulse-VM-001-HIGH_CPU
-      AlarmDescription: VM-001 CPU utilization exceeds 85%
+      AlarmDescription: VM-001 CPU utilization exceeds 85 percent threshold
       Namespace: !Ref CloudWatchNamespace
       MetricName: CPUUtilization
       Dimensions:
@@ -307,7 +355,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub cloudpulse-VM-001-NETWORK_LATENCY
-      AlarmDescription: VM-001 network latency exceeds 500ms
+      AlarmDescription: VM-001 network latency exceeds 500ms threshold
       Namespace: !Ref CloudWatchNamespace
       MetricName: NetworkLatency
       Dimensions:
@@ -327,7 +375,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub cloudpulse-API-001-SERVICE_FAILURE
-      AlarmDescription: API-001 latency exceeds 500ms
+      AlarmDescription: API-001 latency exceeds 500ms representing service failure
       Namespace: !Ref CloudWatchNamespace
       MetricName: NetworkLatency
       Dimensions:
@@ -347,7 +395,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub cloudpulse-DB-001-HIGH_CPU
-      AlarmDescription: DB-001 CPU utilization exceeds 85%
+      AlarmDescription: DB-001 CPU utilization exceeds 85 percent threshold
       Namespace: !Ref CloudWatchNamespace
       MetricName: CPUUtilization
       Dimensions:
@@ -367,7 +415,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub cloudpulse-STORAGE-001-STORAGE_EXHAUSTION
-      AlarmDescription: STORAGE-001 storage utilization exceeds 90%
+      AlarmDescription: STORAGE-001 storage utilization exceeds 90 percent threshold
       Namespace: !Ref CloudWatchNamespace
       MetricName: StorageUtilization
       Dimensions:
@@ -383,6 +431,7 @@ Resources:
       TreatMissingData: notBreaching
       ActionsEnabled: true
 
+  # ── S3: Static Frontend Storage (Private by default) ──────────────────────
   FrontendBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -403,6 +452,7 @@ Resources:
         - Key: Project
           Value: CloudPulse
 
+  # Public Bucket Policy attached ONLY if EnablePublicFrontendBucket is "true"
   FrontendBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Condition: IsPublicFrontendEnabled
@@ -416,6 +466,10 @@ Resources:
             Principal: "*"
             Action: s3:GetObject
             Resource: !Sub arn:aws:s3:::${FrontendBucket}/*
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # IAM Roles (Least-Privilege)
+  # ──────────────────────────────────────────────────────────────────────────
 
   ApiFunctionRole:
     Type: AWS::IAM::Role
@@ -553,6 +607,9 @@ Resources:
                   - sqs:SendMessage
                 Resource: !GetAtt RecoveryDLQ.Arn
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Outputs
+# ──────────────────────────────────────────────────────────────────────────────
 Outputs:
   ApiEndpoint:
     Description: API Gateway base endpoint URL
