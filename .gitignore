@@ -1,0 +1,71 @@
+# ──────────────────────────────────────────────
+# CloudPulse .gitignore
+# ──────────────────────────────────────────────
+
+# ── Secrets & credentials (NEVER commit these) ──
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials
+aws-exports.js
+
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.whl
+.venv/
+venv/
+env/
+.Python
+pip-wheel-metadata/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.log
+
+# ── AWS SAM ──
+.aws-sam/
+samconfig.toml.bak
+packaged.yaml
+
+# ── Node / Frontend ──
+node_modules/
+dist/
+.cache/
+*.local
+.DS_Store
+.vite/
+
+# ── TypeScript ──
+*.tsbuildinfo
+
+# ── Testing ──
+junit.xml
+test-results/
+
+# ── IDEs ──
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── OS ──
+.DS_Store
+Thumbs.db
+
+# ── CDK (if ever added) ──
+cdk.out/

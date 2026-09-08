@@ -1,0 +1,13 @@
+{
+  "version": "0",
+  "id": "abcdef12-1234-1234-1234-abcdef123456",
+  "source": "cloudpulse.simulator",
+  "account": "123456789012",
+  "time": "2026-09-08T15:00:00Z",
+  "region": "ap-south-1",
+  "detail-type": "FailureInjected",
+  "detail": {
+    "resourceId": "VM-001",
+    "failureType": "HIGH_CPU"
+  }
+}

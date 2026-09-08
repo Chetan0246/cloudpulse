@@ -1,0 +1,613 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  CloudPulse — Autonomous Cloud Reliability and Self-Healing Simulator
+  Course: BCSE355L | Fall 2026-2027
+  
+  All resources are designed for AWS Free Tier compatibility.
+  Failures are SIMULATED via DynamoDB state changes — no real infrastructure is harmed.
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Global defaults applied to all Lambda functions unless overridden
+# ──────────────────────────────────────────────────────────────────────────────
+Globals:
+  Function:
+    Runtime: python3.12
+    MemorySize: 256        # Free tier: 400,000 GB-seconds/month. 256MB is sufficient.
+    Timeout: 30            # API calls should complete well within 30s
+    Architectures:
+      - arm64              # Graviton2: ~20% cheaper and faster than x86_64 for Python
+    Layers:
+      - !Ref CloudPulseLayer
+    Environment:
+      Variables:
+        DYNAMODB_RESOURCES_TABLE: !Ref ResourcesTable
+        DYNAMODB_INCIDENTS_TABLE: !Ref IncidentsTable
+        CLOUDWATCH_NAMESPACE: CloudPulse
+        EVENTBRIDGE_BUS_NAME: default
+        SNS_TOPIC_ARN: !Ref NotificationsTopic
+        AWS_REGION_NAME: !Ref AWS::Region
+        LOG_LEVEL: INFO
+    Tags:
+      Project: CloudPulse
+      Course: BCSE355L
+      Environment: !Ref Environment
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Parameters (supplied at deploy time via samconfig.toml or --parameter-overrides)
+# ──────────────────────────────────────────────────────────────────────────────
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, prod]
+    Description: Deployment environment
+
+  NotificationEmail:
+    Type: String
+    Description: Email address for SNS failure/recovery notifications
+    # Default empty string disables email subscription
+    Default: ""
+
+  CorsAllowedOrigins:
+    Type: String
+    Default: "*"
+    Description: >
+      CORS allowed origins for API Gateway.
+      In production, set to the S3 website URL.
+      Example: http://cloudpulse-frontend-123456789012.s3-website.ap-south-1.amazonaws.com
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Conditions
+# ──────────────────────────────────────────────────────────────────────────────
+Conditions:
+  CreateEmailSubscription: !Not [!Equals [!Ref NotificationEmail, ""]]
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Resources
+# ──────────────────────────────────────────────────────────────────────────────
+Resources:
+
+  # ── Lambda Layer: Shared Python dependencies ──────────────────────────────
+  # The layer contains backend/requirements.txt (FastAPI, pydantic, boto3, etc.)
+  # All three Lambda functions reference this layer, avoiding duplication.
+  CloudPulseLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub cloudpulse-shared-layer-${Environment}
+      Description: Shared Python dependencies for all CloudPulse Lambda functions
+      ContentUri: ../../backend/
+      CompatibleRuntimes:
+        - python3.12
+      CompatibleArchitectures:
+        - arm64
+    Metadata:
+      BuildMethod: python3.12
+
+  # ── DynamoDB: Resources Table ─────────────────────────────────────────────
+  # Stores the state of all virtual resources.
+  # On-demand billing (PAY_PER_REQUEST) — no provisioned capacity charges.
+  ResourcesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub cloudpulse-resources-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      TableClass: STANDARD_INFREQUENT_ACCESS  # Lower cost for infrequently read data
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false  # Not needed for simulation data
+      AttributeDefinitions:
+        - AttributeName: resource_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: resource_id
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: CloudPulse
+
+  # ── DynamoDB: Incidents Table ─────────────────────────────────────────────
+  # Stores incident records created during failure/recovery cycles.
+  IncidentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub cloudpulse-incidents-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      TableClass: STANDARD_INFREQUENT_ACCESS
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      AttributeDefinitions:
+        - AttributeName: incident_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: incident_id
+          KeyType: HASH
+      Tags:
+        - Key: Project
+          Value: CloudPulse
+
+  # ── SNS Topic: Notifications ──────────────────────────────────────────────
+  NotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub cloudpulse-notifications-${Environment}
+      DisplayName: CloudPulse Alerts
+      Tags:
+        - Key: Project
+          Value: CloudPulse
+
+  # Optional email subscription — only created if NotificationEmail is set
+  NotificationsEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: CreateEmailSubscription
+    Properties:
+      TopicArn: !Ref NotificationsTopic
+      Protocol: email
+      Endpoint: !Ref NotificationEmail
+
+  # ── API Lambda ────────────────────────────────────────────────────────────
+  # FastAPI application wrapped by Mangum. Serves all /resources, /incidents,
+  # /simulate, /health endpoints via API Gateway.
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub cloudpulse-api-${Environment}
+      Description: FastAPI backend for CloudPulse, wrapped by Mangum for Lambda
+      CodeUri: ../../lambda/api/
+      Handler: handler.handler
+      Role: !GetAtt ApiFunctionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          CORS_ALLOWED_ORIGINS: !Ref CorsAllowedOrigins
+      Events:
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /{proxy+}
+            Method: ANY
+        ApiHealthCheck:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /health
+            Method: GET
+
+  # ── Simulator Lambda ──────────────────────────────────────────────────────
+  # Runs on a schedule to update virtual resource metrics and publish to CW.
+  SimulatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub cloudpulse-simulator-${Environment}
+      Description: Periodically simulates resource metric changes and publishes to CloudWatch
+      CodeUri: ../../lambda/simulator/
+      Handler: handler.handler
+      Role: !GetAtt SimulatorFunctionRole.Arn
+      Timeout: 60   # Simulator iterates over all resources; allow more time
+      Events:
+        SimulatorSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(2 minutes)
+            Name: !Sub cloudpulse-heartbeat-${Environment}
+            Description: Triggers the CloudPulse simulator every 2 minutes
+            Enabled: true
+
+  # ── Recovery Lambda ───────────────────────────────────────────────────────
+  # Triggered by EventBridge when a CloudWatch alarm fires.
+  RecoveryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub cloudpulse-recovery-${Environment}
+      Description: Executes simulated recovery actions when failures are detected
+      CodeUri: ../../lambda/recovery/
+      Handler: handler.handler
+      Role: !GetAtt RecoveryFunctionRole.Arn
+      Timeout: 60   # Recovery actions include simulated delays
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt RecoveryDLQ.Arn
+      Events:
+        AlarmEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: default
+            Pattern:
+              source:
+                - aws.cloudwatch
+              detail-type:
+                - CloudWatch Alarm State Change
+              detail:
+                alarmName:
+                  - prefix: cloudpulse-
+                state:
+                  value:
+                    - ALARM
+        SimulatorEvent:
+          Type: EventBridgeRule
+          Properties:
+            EventBusName: default
+            Pattern:
+              source:
+                - cloudpulse.simulator
+              detail-type:
+                - FailureInjected
+
+  # ── Recovery Dead Letter Queue ────────────────────────────────────────────
+  # Captures events that failed all recovery Lambda retry attempts.
+  # Allows debugging failed recoveries without losing event data.
+  RecoveryDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub cloudpulse-recovery-dlq-${Environment}
+      MessageRetentionPeriod: 86400  # 24 hours
+      Tags:
+        - Key: Project
+          Value: CloudPulse
+
+  # ── API Gateway (HTTP API) ────────────────────────────────────────────────
+  # HTTP API is cheaper (~$1/million requests) and lower latency than REST API.
+  # Sufficient for this project — we don't need REST API features (usage plans,
+  # API keys, request validation models).
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: !Ref Environment
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref CorsAllowedOrigins
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - Content-Type
+          - Authorization
+        MaxAge: 300
+      AccessLogSettings:
+        DestinationArn: !GetAtt ApiAccessLogGroup.Arn
+        Format: >-
+          {"requestId":"$context.requestId","ip":"$context.identity.sourceIp",
+          "requestTime":"$context.requestTime","httpMethod":"$context.httpMethod",
+          "routeKey":"$context.routeKey","status":"$context.status",
+          "protocol":"$context.protocol","responseLength":"$context.responseLength",
+          "integrationLatency":"$context.integrationLatency"}
+
+  # ── CloudWatch Log Groups ─────────────────────────────────────────────────
+  # Explicitly defined with a short retention period to control log storage costs.
+  # Default retention = forever = unbounded cost.
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/cloudpulse-api-${Environment}
+      RetentionInDays: 7
+
+  SimulatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/cloudpulse-simulator-${Environment}
+      RetentionInDays: 7
+
+  RecoveryLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/cloudpulse-recovery-${Environment}
+      RetentionInDays: 7
+
+  ApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/cloudpulse-${Environment}
+      RetentionInDays: 7
+
+  # ── CloudWatch Alarms ─────────────────────────────────────────────────────
+  # One alarm per resource per failure type.
+  # Alarm naming convention: cloudpulse-{ResourceId}-{FailureType}
+  # The Recovery Lambda parses this name to determine what to do.
+  #
+  # Free Tier: 10 alarms. We define 8 here (2 resources × 4 alarm types as demo).
+  # Additional alarms for DB-001 and STORAGE-001 can be added if Free Tier is exceeded.
+  # Cost: ~$0.10/alarm/month beyond free tier.
+
+  AlarmVM001HighCPU:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub cloudpulse-VM-001-HIGH_CPU
+      AlarmDescription: VM-001 CPU utilization exceeds 85%
+      Namespace: CloudPulse
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: ResourceId
+          Value: VM-001
+        - Name: ResourceType
+          Value: VM
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 85.0
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+
+  AlarmVM001NetworkLatency:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub cloudpulse-VM-001-NETWORK_LATENCY
+      AlarmDescription: VM-001 network latency exceeds 500ms
+      Namespace: CloudPulse
+      MetricName: NetworkLatency
+      Dimensions:
+        - Name: ResourceId
+          Value: VM-001
+        - Name: ResourceType
+          Value: VM
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 500.0
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+
+  AlarmAPI001ServiceFailure:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub cloudpulse-API-001-SERVICE_FAILURE
+      AlarmDescription: API-001 network latency exceeds 500ms (proxy for service failure)
+      Namespace: CloudPulse
+      MetricName: NetworkLatency
+      Dimensions:
+        - Name: ResourceId
+          Value: API-001
+        - Name: ResourceType
+          Value: API
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 500.0
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+
+  AlarmDB001HighCPU:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub cloudpulse-DB-001-HIGH_CPU
+      AlarmDescription: DB-001 CPU utilization exceeds 85%
+      Namespace: CloudPulse
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: ResourceId
+          Value: DB-001
+        - Name: ResourceType
+          Value: DB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 85.0
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+
+  AlarmSTORAGE001StorageExhaustion:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub cloudpulse-STORAGE-001-STORAGE_EXHAUSTION
+      AlarmDescription: STORAGE-001 storage utilization exceeds 90%
+      Namespace: CloudPulse
+      MetricName: StorageUtilization
+      Dimensions:
+        - Name: ResourceId
+          Value: STORAGE-001
+        - Name: ResourceType
+          Value: STORAGE
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 90.0
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+
+  # ── S3: Frontend Hosting ──────────────────────────────────────────────────
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub cloudpulse-frontend-${AWS::AccountId}-${Environment}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html  # SPA routing: 404 falls back to index.html
+      Tags:
+        - Key: Project
+          Value: CloudPulse
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: "*"
+            Action: s3:GetObject
+            Resource: !Sub arn:aws:s3:::${FrontendBucket}/*
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # IAM Roles — Least Privilege
+  # Each Lambda has its own role with only the permissions it needs.
+  # ──────────────────────────────────────────────────────────────────────────
+
+  ApiFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub cloudpulse-api-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ApiDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Read resources
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                Resource: !GetAtt ResourcesTable.Arn
+              # Read and write incidents
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                Resource: !GetAtt IncidentsTable.Arn
+              # Write resources (for failure injection via /simulate/inject)
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt ResourcesTable.Arn
+        - PolicyName: ApiCloudWatchPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Publish custom metrics (for /simulate/inject to push metric spikes)
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    cloudwatch:namespace: CloudPulse
+        - PolicyName: ApiEventBridgePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Put events for direct failure injection (bypasses alarm delay for demo)
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                Resource: !Sub arn:aws:events:${AWS::Region}:${AWS::AccountId}:event-bus/default
+
+  SimulatorFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub cloudpulse-simulator-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SimulatorDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt ResourcesTable.Arn
+        - PolicyName: SimulatorCloudWatchPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    cloudwatch:namespace: CloudPulse
+
+  RecoveryFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub cloudpulse-recovery-role-${Environment}
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: RecoveryDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt ResourcesTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt IncidentsTable.Arn
+        - PolicyName: RecoverySNSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref NotificationsTopic
+        - PolicyName: RecoverySQSDLQPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt RecoveryDLQ.Arn
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Outputs
+# ──────────────────────────────────────────────────────────────────────────────
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+    Export:
+      Name: !Sub CloudPulse-ApiEndpoint-${Environment}
+
+  FrontendBucketWebsiteURL:
+    Description: S3 static website URL for the React frontend
+    Value: !GetAtt FrontendBucket.WebsiteURL
+    Export:
+      Name: !Sub CloudPulse-FrontendURL-${Environment}
+
+  ResourcesTableName:
+    Description: DynamoDB resources table name
+    Value: !Ref ResourcesTable
+
+  IncidentsTableName:
+    Description: DynamoDB incidents table name
+    Value: !Ref IncidentsTable
+
+  NotificationsTopicArn:
+    Description: SNS topic ARN for notifications
+    Value: !Ref NotificationsTopic

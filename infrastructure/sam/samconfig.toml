@@ -1,0 +1,24 @@
+# SAM CLI configuration file.
+# Values here are used as defaults for `sam deploy`.
+# Sensitive values (email, ARNs) are NOT stored here — pass via environment variables.
+
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "cloudpulse-dev"
+region = "ap-south-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM CAPABILITY_NAMED_IAM"
+disable_rollback = false
+
+[default.build.parameters]
+use_container = false   # Use local Python 3.12 (faster; avoid Docker pull)
+parallel = true
+
+[default.deploy.parameters]
+s3_prefix = "cloudpulse"
+# parameter_overrides — set these as environment variables or pass explicitly:
+# Environment=dev
+# NotificationEmail=your-email@example.com
+# CorsAllowedOrigins=http://localhost:5173

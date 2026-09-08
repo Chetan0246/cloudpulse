@@ -1,0 +1,46 @@
+[
+  {
+    "resource_id": "VM-001",
+    "resource_type": "VM",
+    "current_state": "HEALTHY",
+    "cpu_utilization": 25.0,
+    "memory_utilization": 30.0,
+    "storage_utilization": 20.0,
+    "network_latency_ms": 15.0,
+    "health_status": "HEALTHY",
+    "active_failure_type": null
+  },
+  {
+    "resource_id": "API-001",
+    "resource_type": "API",
+    "current_state": "HEALTHY",
+    "cpu_utilization": 15.0,
+    "memory_utilization": 20.0,
+    "storage_utilization": 10.0,
+    "network_latency_ms": 20.0,
+    "health_status": "HEALTHY",
+    "active_failure_type": null
+  },
+  {
+    "resource_id": "DB-001",
+    "resource_type": "DB",
+    "current_state": "HEALTHY",
+    "cpu_utilization": 40.0,
+    "memory_utilization": 55.0,
+    "storage_utilization": 60.0,
+    "network_latency_ms": 10.0,
+    "health_status": "HEALTHY",
+    "active_failure_type": null
+  },
+  {
+    "resource_id": "STORAGE-001",
+    "resource_type": "STORAGE",
+    "current_state": "HEALTHY",
+    "cpu_utilization": 10.0,
+    "memory_utilization": 15.0,
+    "storage_utilization": 45.0,
+    "network_latency_ms": 5.0,
+    "health_status": "HEALTHY",
+    "active_failure_type": null
+  }
+]

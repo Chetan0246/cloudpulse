@@ -1,0 +1,23 @@
+[project]
+name = "cloudpulse-backend"
+version = "0.1.0"
+description = "CloudPulse FastAPI backend — pure Python, no Lambda dependencies"
+requires-python = ">=3.12"
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W", "UP", "S", "B", "A", "C4", "DTZ", "RET"]
+ignore = ["S101"]   # allow assert in tests
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

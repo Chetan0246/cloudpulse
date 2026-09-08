@@ -1,0 +1,7 @@
+# ── Runtime dependencies (installed in Lambda layer and locally) ──
+fastapi==0.115.0
+pydantic==2.9.2
+pydantic-settings==2.5.2
+boto3==1.35.0
+botocore==1.35.0
+python-dateutil==2.9.0

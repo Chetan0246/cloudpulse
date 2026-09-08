@@ -1,0 +1,37 @@
+{
+  "version": "0",
+  "id": "12345678-1234-1234-1234-123456789012",
+  "source": "aws.cloudwatch",
+  "account": "123456789012",
+  "time": "2026-09-08T15:00:00Z",
+  "region": "ap-south-1",
+  "detail-type": "CloudWatch Alarm State Change",
+  "detail": {
+    "alarmName": "cloudpulse-VM-001-HIGH_CPU",
+    "state": {
+      "value": "ALARM",
+      "reason": "Threshold Crossed: 2 out of last 2 datapoints were >= 85.0",
+      "timestamp": "2026-09-08T15:00:00.000+0000"
+    },
+    "previousState": {
+      "value": "OK",
+      "timestamp": "2026-09-08T14:58:00.000+0000"
+    },
+    "configuration": {
+      "metrics": [
+        {
+          "metricStat": {
+            "metric": {
+              "namespace": "CloudPulse",
+              "name": "CPUUtilization",
+              "dimensions": {
+                "ResourceId": "VM-001",
+                "ResourceType": "VM"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

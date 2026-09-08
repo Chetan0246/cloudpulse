@@ -1,0 +1,4 @@
+# Lambda-specific dependencies for the API function.
+# backend/requirements.txt is installed as a Lambda Layer.
+# Only add packages here that are NOT in the shared layer.
+mangum==0.17.0
