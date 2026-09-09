@@ -331,11 +331,33 @@ Resources:
                 - FailureInjected
 
   # ── CloudWatch Alarms: Failure Detection ──────────────────────────────────
+  #
+  # Naming convention: cloudpulse-{ResourceId}-{FailureType}
+  # e.g. cloudpulse-VM-001-HIGH_CPU
+  #
+  # Alarm configuration:
+  #   Period: 60s | EvaluationPeriods: 2 | TreatMissingData: notBreaching
+  #
+  # Why EvaluationPeriods=2?
+  #   Requires two consecutive breaching data points before ALARM fires.
+  #   Prevents false positives from single-point metric spikes during
+  #   the simulator random-walk heartbeat.
+  #
+  # Failure scenario → alarm mapping:
+  #   FS-01 HIGH_CPU          → CPUUtilization   ≥ 85%
+  #   FS-02 SERVICE_FAILURE   → NetworkLatency   ≥ 500ms
+  #   FS-03 STORAGE_EXHAUSTION → StorageUtilization ≥ 90%
+  #   FS-04 NETWORK_LATENCY   → NetworkLatency   ≥ 500ms
+  #   FS-05 SERVICE_DOWNTIME  → NetworkLatency   ≥ 500ms (extreme: 9999ms)
+  #   (ServiceHealth)         → ServiceHealth    ≤ 50
+  #
+  # ── VM-001 ──────────────────────────────────────────────────────────────
+
   AlarmVM001HighCPU:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub cloudpulse-VM-001-HIGH_CPU
-      AlarmDescription: VM-001 CPU utilization exceeds 85 percent threshold
+      AlarmName: cloudpulse-VM-001-HIGH_CPU
+      AlarmDescription: "FS-01: VM-001 CPU utilization ≥ 85% — triggers recovery scale-out"
       Namespace: !Ref CloudWatchNamespace
       MetricName: CPUUtilization
       Dimensions:
@@ -350,12 +372,14 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
       ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
 
   AlarmVM001NetworkLatency:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub cloudpulse-VM-001-NETWORK_LATENCY
-      AlarmDescription: VM-001 network latency exceeds 500ms threshold
+      AlarmName: cloudpulse-VM-001-NETWORK_LATENCY
+      AlarmDescription: "FS-02/04/05: VM-001 network latency ≥ 500ms — indicates service failure, latency, or downtime"
       Namespace: !Ref CloudWatchNamespace
       MetricName: NetworkLatency
       Dimensions:
@@ -370,12 +394,38 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
       ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
 
-  AlarmAPI001ServiceFailure:
+  AlarmVM001ServiceHealth:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub cloudpulse-API-001-SERVICE_FAILURE
-      AlarmDescription: API-001 latency exceeds 500ms representing service failure
+      AlarmName: cloudpulse-VM-001-SERVICE_HEALTH
+      AlarmDescription: "VM-001 composite ServiceHealth score ≤ 50 — overall degradation"
+      Namespace: !Ref CloudWatchNamespace
+      MetricName: ServiceHealth
+      Dimensions:
+        - Name: ResourceId
+          Value: VM-001
+        - Name: ResourceType
+          Value: VM
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 50.0
+      ComparisonOperator: LessThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
+
+  # ── API-001 ──────────────────────────────────────────────────────────────
+
+  AlarmAPI001NetworkLatency:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloudpulse-API-001-NETWORK_LATENCY
+      AlarmDescription: "FS-02/04/05: API-001 network latency ≥ 500ms — service failure or downtime"
       Namespace: !Ref CloudWatchNamespace
       MetricName: NetworkLatency
       Dimensions:
@@ -390,12 +440,60 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
       ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
+
+  AlarmAPI001HighCPU:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloudpulse-API-001-HIGH_CPU
+      AlarmDescription: "FS-01: API-001 CPU utilization ≥ 85%"
+      Namespace: !Ref CloudWatchNamespace
+      MetricName: CPUUtilization
+      Dimensions:
+        - Name: ResourceId
+          Value: API-001
+        - Name: ResourceType
+          Value: API
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 85.0
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
+
+  AlarmAPI001ServiceHealth:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloudpulse-API-001-SERVICE_HEALTH
+      AlarmDescription: "API-001 composite ServiceHealth score ≤ 50"
+      Namespace: !Ref CloudWatchNamespace
+      MetricName: ServiceHealth
+      Dimensions:
+        - Name: ResourceId
+          Value: API-001
+        - Name: ResourceType
+          Value: API
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 50.0
+      ComparisonOperator: LessThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
+
+  # ── DB-001 ──────────────────────────────────────────────────────────────
 
   AlarmDB001HighCPU:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub cloudpulse-DB-001-HIGH_CPU
-      AlarmDescription: DB-001 CPU utilization exceeds 85 percent threshold
+      AlarmName: cloudpulse-DB-001-HIGH_CPU
+      AlarmDescription: "FS-01: DB-001 CPU utilization ≥ 85%"
       Namespace: !Ref CloudWatchNamespace
       MetricName: CPUUtilization
       Dimensions:
@@ -410,12 +508,60 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
       ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
+
+  AlarmDB001NetworkLatency:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloudpulse-DB-001-NETWORK_LATENCY
+      AlarmDescription: "FS-02/04/05: DB-001 network latency ≥ 500ms"
+      Namespace: !Ref CloudWatchNamespace
+      MetricName: NetworkLatency
+      Dimensions:
+        - Name: ResourceId
+          Value: DB-001
+        - Name: ResourceType
+          Value: DB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 500.0
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
+
+  AlarmDB001ServiceHealth:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloudpulse-DB-001-SERVICE_HEALTH
+      AlarmDescription: "DB-001 composite ServiceHealth score ≤ 50"
+      Namespace: !Ref CloudWatchNamespace
+      MetricName: ServiceHealth
+      Dimensions:
+        - Name: ResourceId
+          Value: DB-001
+        - Name: ResourceType
+          Value: DB
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 50.0
+      ComparisonOperator: LessThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
+
+  # ── STORAGE-001 ──────────────────────────────────────────────────────────
 
   AlarmSTORAGE001StorageExhaustion:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmName: !Sub cloudpulse-STORAGE-001-STORAGE_EXHAUSTION
-      AlarmDescription: STORAGE-001 storage utilization exceeds 90 percent threshold
+      AlarmName: cloudpulse-STORAGE-001-STORAGE_EXHAUSTION
+      AlarmDescription: "FS-03: STORAGE-001 storage utilization ≥ 90%"
       Namespace: !Ref CloudWatchNamespace
       MetricName: StorageUtilization
       Dimensions:
@@ -430,6 +576,52 @@ Resources:
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
       ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
+
+  AlarmSTORAGE001NetworkLatency:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloudpulse-STORAGE-001-NETWORK_LATENCY
+      AlarmDescription: "FS-02/04/05: STORAGE-001 network latency ≥ 500ms"
+      Namespace: !Ref CloudWatchNamespace
+      MetricName: NetworkLatency
+      Dimensions:
+        - Name: ResourceId
+          Value: STORAGE-001
+        - Name: ResourceType
+          Value: STORAGE
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 500.0
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
+
+  AlarmSTORAGE001ServiceHealth:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: cloudpulse-STORAGE-001-SERVICE_HEALTH
+      AlarmDescription: "STORAGE-001 composite ServiceHealth score ≤ 50"
+      Namespace: !Ref CloudWatchNamespace
+      MetricName: ServiceHealth
+      Dimensions:
+        - Name: ResourceId
+          Value: STORAGE-001
+        - Name: ResourceType
+          Value: STORAGE
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      Threshold: 50.0
+      ComparisonOperator: LessThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      ActionsEnabled: true
+      AlarmActions:
+        - !Ref NotificationsTopic
 
   # ── S3: Static Frontend Storage (Private by default) ──────────────────────
   FrontendBucket:
