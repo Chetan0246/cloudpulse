@@ -4,10 +4,11 @@ Structured JSON logging configuration for Lambda and local environments.
 Lambda captures stdout/stderr. Using JSON-formatted logs ensures that
 CloudWatch Logs Insights can query structured fields.
 """
+
 import json
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -16,7 +17,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         log_obj: dict[str, Any] = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -24,7 +25,9 @@ class JsonFormatter(logging.Formatter):
         if record.exc_info:
             log_obj["exception"] = self.formatException(record.exc_info)
         if hasattr(record, "extra"):
-            log_obj.update(record.extra)  # type: ignore[arg-type]
+            extra_data = record.extra
+            if isinstance(extra_data, dict):
+                log_obj.update(extra_data)
         return json.dumps(log_obj)
 
 

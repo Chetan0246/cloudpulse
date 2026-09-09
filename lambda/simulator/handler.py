@@ -17,6 +17,13 @@ Design note:
   The simulator is intentionally separated from recovery. This demonstrates
   the event-driven, decoupled architecture — the simulator publishes facts
   (metrics), and the recovery system reacts to alarms derived from those facts.
+
+Metric alignment:
+  The simulator publishes the same 5 CloudWatch metrics as MonitoringService:
+  CPUUtilization, MemoryUtilization, StorageUtilization, NetworkLatency,
+  and the composite ServiceHealth score. This ensures the ServiceHealth alarm
+  fires correctly whether a failure is injected via the API or detected by
+  the scheduled heartbeat.
 """
 import json
 import logging
@@ -48,6 +55,7 @@ from app.models.resource import (
     ResourceState,
 )
 from app.repositories.resource_repository import ResourceRepository
+from app.services.monitoring_service import compute_service_health
 
 logger = logging.getLogger(__name__)
 
@@ -69,24 +77,35 @@ def _compute_state(resource: Resource) -> tuple[ResourceState, HealthStatus]:
 
 
 def _publish_metrics(resource: Resource, cw_client: Any, namespace: str) -> None:
-    """Publish all metrics for a resource to CloudWatch."""
+    """Publish all five CloudWatch metrics for a resource in a single batched call.
+
+    Publishes the same five metrics as MonitoringService.publish_resource_metrics():
+      CPUUtilization, MemoryUtilization, StorageUtilization, NetworkLatency, ServiceHealth
+
+    Using a single PutMetricData call with all 5 data points is the most
+    cost-efficient approach ($0.01/1000 requests).
+    """
     dimensions = [
         {"Name": "ResourceId", "Value": resource.resource_id},
         {"Name": "ResourceType", "Value": resource.resource_type.value},
     ]
+    service_health = compute_service_health(resource)
+    timestamp = datetime.now(timezone.utc)
     metric_data = [
         {"MetricName": "CPUUtilization", "Value": resource.cpu_utilization, "Unit": "Percent"},
         {"MetricName": "MemoryUtilization", "Value": resource.memory_utilization, "Unit": "Percent"},
         {"MetricName": "StorageUtilization", "Value": resource.storage_utilization, "Unit": "Percent"},
         {"MetricName": "NetworkLatency", "Value": resource.network_latency_ms, "Unit": "Milliseconds"},
+        {"MetricName": "ServiceHealth", "Value": service_health, "Unit": "None"},
     ]
     cw_client.put_metric_data(
         Namespace=namespace,
         MetricData=[
-            {**m, "Dimensions": dimensions, "Timestamp": datetime.now(timezone.utc)}
+            {**m, "Dimensions": dimensions, "Timestamp": timestamp}
             for m in metric_data
         ],
     )
+
 
 
 def handler(event: dict, context: Any) -> dict:

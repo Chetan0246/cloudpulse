@@ -10,8 +10,13 @@ target-version = ["py312"]
 
 [tool.ruff]
 line-length = 100
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "S", "B", "A", "C4", "DTZ", "RET"]
-ignore = ["S101"]   # allow assert in tests
+ignore = ["S101", "B008"]   # allow assert in tests and Depends/Query in FastAPI route defaults
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S105", "S106", "C408", "E501"]
 
 [tool.mypy]
 python_version = "3.12"
