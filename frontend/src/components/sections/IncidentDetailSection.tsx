@@ -209,8 +209,8 @@ export const IncidentDetailSection: React.FC<IncidentDetailSectionProps> = ({
       )}
 
       {/* Visual Step Timeline */}
-      <Panel title="Incident Lifecycle Stepper" subtitle="Automated recovery state progression">
-        <div className="relative flex flex-col md:flex-row items-center justify-between py-4 gap-4 md:gap-0">
+      <Panel title="Incident Lifecycle Stepper" subtitle="Automated recovery state progression and milestone timeline">
+        <div className="relative flex flex-col md:flex-row items-center justify-between py-4 gap-4 md:gap-0 border-b border-slate-800/80 mb-4">
           {[
             {
               step: '1. Detected',
@@ -241,7 +241,7 @@ export const IncidentDetailSection: React.FC<IncidentDetailSectionProps> = ({
               <div
                 className={`w-9 h-9 rounded-full flex items-center justify-center font-mono font-bold text-xs border mb-2 transition-all ${
                   s.done
-                    ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500'
+                    ? 'bg-emerald-600/20 text-emerald-400 border-emerald-500 shadow-sm shadow-emerald-500/20'
                     : s.active
                     ? 'bg-cyan-600/30 text-cyan-300 border-cyan-400 animate-pulse ring-2 ring-cyan-500/30'
                     : 'bg-slate-900 text-slate-600 border-slate-800'
@@ -253,6 +253,66 @@ export const IncidentDetailSection: React.FC<IncidentDetailSectionProps> = ({
               <div className="text-[11px] font-mono text-slate-400 mt-0.5">{s.time}</div>
             </div>
           ))}
+        </div>
+
+        {/* Chronological Incident Event Timeline */}
+        <div className="space-y-3 pt-2">
+          <h4 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider mb-3">
+            Chronological Incident Timeline:
+          </h4>
+          <div className="relative pl-6 border-l-2 border-slate-800 space-y-4 font-mono text-xs">
+            {/* 1. Created */}
+            <div className="relative">
+              <span className="absolute -left-[31px] top-0.5 w-3.5 h-3.5 rounded-full bg-amber-500 border-2 border-slate-900 ring-2 ring-amber-500/30" />
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-amber-400">1. Workload Anomaly Created</span>
+                <span className="text-[11px] text-slate-500">{formatDate(createdAt)}</span>
+              </div>
+              <p className="text-slate-400 text-[11px] mt-0.5">
+                Fault condition injected into {resourceId}. Target threshold breached.
+              </p>
+            </div>
+
+            {/* 2. Detected */}
+            <div className="relative">
+              <span className="absolute -left-[31px] top-0.5 w-3.5 h-3.5 rounded-full bg-rose-500 border-2 border-slate-900 ring-2 ring-rose-500/30 animate-pulse" />
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-rose-400">2. CloudWatch Alarm Detected</span>
+                <span className="text-[11px] text-slate-500">{formatDate(detectedAt)}</span>
+              </div>
+              <p className="text-slate-400 text-[11px] mt-0.5">
+                Metric alarm state changed to ALARM. Incident opened with severity {severity}.
+              </p>
+            </div>
+
+            {/* 3. Recovery Initiated */}
+            {recoveryStartedAt && (
+              <div className="relative">
+                <span className="absolute -left-[31px] top-0.5 w-3.5 h-3.5 rounded-full bg-cyan-500 border-2 border-slate-900 ring-2 ring-cyan-500/30" />
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-cyan-400">3. EventBridge Routed to Recovery Lambda</span>
+                  <span className="text-[11px] text-slate-500">{formatDate(recoveryStartedAt)}</span>
+                </div>
+                <p className="text-slate-400 text-[11px] mt-0.5">
+                  Recovery Lambda invoked with correlation context. Dispatched strategy: {recoveryAction}.
+                </p>
+              </div>
+            )}
+
+            {/* 4. Resolved */}
+            {recoveredAt && (
+              <div className="relative">
+                <span className="absolute -left-[31px] top-0.5 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-slate-900 ring-2 ring-emerald-500/30" />
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-emerald-400">4. Recovery Verified & Resolved</span>
+                  <span className="text-[11px] text-slate-500">{formatDate(recoveredAt)}</span>
+                </div>
+                <p className="text-slate-400 text-[11px] mt-0.5">
+                  Remediation verified nominal. Total MTTR: {calculateDuration()}. Notification status: {notificationStatus}.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       </Panel>
 

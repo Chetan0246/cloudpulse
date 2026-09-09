@@ -162,6 +162,38 @@ export const ActiveIncidentsSection: React.FC<ActiveIncidentsSectionProps> = ({
         </div>
       </div>
 
+      {/* Incident Status Metric Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs font-mono">
+        <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg flex items-center justify-between">
+          <span className="text-slate-400">Total Tracked</span>
+          <span className="text-slate-200 font-bold text-sm">{incidents.length}</span>
+        </div>
+        <div className="bg-rose-950/20 border border-rose-800/40 p-3 rounded-lg flex items-center justify-between">
+          <span className="text-slate-400">Open</span>
+          <span className="text-rose-400 font-bold text-sm">
+            {incidents.filter((i) => i.status === 'OPEN').length}
+          </span>
+        </div>
+        <div className="bg-cyan-950/20 border border-cyan-800/40 p-3 rounded-lg flex items-center justify-between">
+          <span className="text-slate-400">Recovering</span>
+          <span className="text-cyan-400 font-bold text-sm">
+            {incidents.filter((i) => i.status === 'RECOVERING').length}
+          </span>
+        </div>
+        <div className="bg-emerald-950/20 border border-emerald-800/40 p-3 rounded-lg flex items-center justify-between">
+          <span className="text-slate-400">Resolved</span>
+          <span className="text-emerald-400 font-bold text-sm">
+            {incidents.filter((i) => i.status === 'RESOLVED').length}
+          </span>
+        </div>
+        <div className="bg-purple-950/20 border border-purple-800/40 p-3 rounded-lg flex items-center justify-between">
+          <span className="text-slate-400">Escalated</span>
+          <span className="text-purple-400 font-bold text-sm">
+            {incidents.filter((i) => i.status === 'ESCALATED').length}
+          </span>
+        </div>
+      </div>
+
       {/* Incidents List Panel */}
       <Panel
         title={`Incident Records (${filteredIncidents.length})`}

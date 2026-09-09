@@ -127,3 +127,30 @@ export interface ReliabilityMetric {
   failure_type_counts: Record<string, number>;
 }
 
+export interface HealthDistribution {
+  total_resources: number;
+  healthy_count: number;
+  warning_count: number;
+  failed_count: number;
+  recovering_count: number;
+  healthy_pct: number;
+  by_state: Record<string, number>;
+  by_status: Record<string, number>;
+}
+
+export interface FleetReliabilityOverview {
+  incident_count: number;
+  recovery_success_rate_pct: number;
+  recovery_failure_rate_pct: number;
+  avg_recovery_time_seconds: number | null;
+  mttr_seconds: number | null;
+  avg_detection_time_seconds: number | null;
+  incident_frequency_per_hour: number;
+  incident_frequency_per_day: number;
+  mtbf_seconds: number | null;
+  health_distribution: HealthDistribution;
+  computed_at: string;
+  resources_metrics?: ReliabilityMetric[];
+}
+
+

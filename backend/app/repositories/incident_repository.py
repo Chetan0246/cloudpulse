@@ -65,8 +65,9 @@ class IncidentRepository:
         """
         List incidents with optional filters, sorted newest first.
 
-        Scans or queries the incidents table, applies filters in-memory
-        or through expressions, and returns up to limit results.
+        Currently uses a full table Scan + in-memory filtering.
+        TODO (A-04): When resource_id is provided, Query the ResourceIndex GSI instead of Scan.
+        For the academic dataset (< 200 incidents) the Scan cost is negligible.
         """
         try:
             response = self.table.scan()
@@ -115,10 +116,19 @@ class IncidentRepository:
     def update(self, incident: Incident) -> Incident:
         """
         Update an existing incident record with updated_at timestamp.
+
+        Uses ConditionExpression to ensure the incident exists before overwriting.
+        NOTE: This is still a full-item overwrite (put_item), not a partial update_item.
+        For production, an optimistic-lock version counter would prevent concurrent write races.
         """
         updated = incident.model_copy(update={"updated_at": datetime.now(UTC)})
         try:
-            self.table.put_item(Item=updated.to_dynamodb_item())
+            self.table.put_item(
+                Item=updated.to_dynamodb_item(),
+                # A-10 FIX: Minimum guard — prevent blind writes to non-existent incidents.
+                # Does not protect against concurrent overwrite races (would need a version counter).
+                ConditionExpression="attribute_exists(incident_id)",
+            )
             return updated
         except ClientError as e:
             logger.error(

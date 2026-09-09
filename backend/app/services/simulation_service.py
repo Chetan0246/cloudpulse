@@ -16,6 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.exceptions import SimulationError
+from app.logging_config import set_correlation_id, set_incident_id, set_trace_stage
 from app.models.incident import (
     Incident,
     IncidentSeverity,
@@ -143,6 +144,25 @@ class SimulationService:
             if metric_key in params and isinstance(params[metric_key], int | float):
                 metrics[metric_key] = float(params[metric_key])
 
+        scenario_code = SCENARIO_CODE_MAP[failure_type]
+        incident_id = str(uuid.uuid4())
+        correlation_id = incident_id
+        set_correlation_id(correlation_id)
+        set_incident_id(incident_id)
+        set_trace_stage("simulation")
+
+        logger.info(
+            "Simulation initiated: injecting failure condition",
+            extra={
+                "stage": "simulation",
+                "correlation_id": correlation_id,
+                "incident_id": incident_id,
+                "resource_id": norm_resource_id,
+                "failure_type": failure_type.value,
+                "scenario": scenario_code,
+            },
+        )
+
         now = datetime.now(UTC)
         updated_resource = resource.model_copy(
             update={
@@ -156,11 +176,24 @@ class SimulationService:
         )
         self._resource_repo.put(updated_resource)
 
+        # Detection phase
+        set_trace_stage("detection")
+        logger.info(
+            "Failure detected: resource entered FAILURE_DETECTED",
+            extra={
+                "stage": "detection",
+                "correlation_id": correlation_id,
+                "incident_id": incident_id,
+                "resource_id": norm_resource_id,
+                "failure_type": failure_type.value,
+                "health_status": HealthStatus.CRITICAL.value,
+            },
+        )
+
         # 4. Emit CloudWatch metrics via MonitoringService (non-fatal)
         emitted_metrics = self._monitoring.publish_resource_metrics(updated_resource)
 
         # 5. Create Incident record
-        incident_id = str(uuid.uuid4())
         inc_severity = severity or IncidentSeverity(failure_type.default_severity())
         incident = Incident(
             incident_id=incident_id,
@@ -182,7 +215,7 @@ class SimulationService:
         self._incident_repo.update(incident)
 
         # 6. Emit EventBridge FailureInjected event (non-fatal, bypasses alarm wait)
-        scenario_code = SCENARIO_CODE_MAP[failure_type]
+        set_trace_stage("event")
         self._monitoring.emit_failure_event(
             resource=updated_resource,
             scenario_code=scenario_code,
@@ -192,10 +225,12 @@ class SimulationService:
         logger.info(
             "Simulated failure injected successfully",
             extra={
+                "stage": "event",
                 "scenario": scenario_code,
                 "resource_id": norm_resource_id,
                 "failure_type": failure_type.value,
                 "incident_id": incident_id,
+                "correlation_id": correlation_id,
             },
         )
         return updated_resource, incident, emitted_metrics

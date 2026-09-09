@@ -30,6 +30,7 @@ Globals:
       Variables:
         DYNAMODB_RESOURCES_TABLE: !Ref ResourcesTable
         DYNAMODB_INCIDENTS_TABLE: !Ref IncidentsTable
+        DYNAMODB_METRICS_TABLE: !Ref MetricsTable
         CLOUDWATCH_NAMESPACE: !Ref CloudWatchNamespace
         EVENTBRIDGE_BUS_NAME: default
         SNS_TOPIC_ARN: !Ref NotificationsTopic
@@ -60,8 +61,11 @@ Parameters:
 
   CorsAllowedOrigins:
     Type: String
-    Default: "*"
-    Description: CORS allowed origins for API Gateway.
+    Default: "http://localhost:5173"
+    Description: >
+      CORS allowed origins for API Gateway. Defaults to local dev server.
+      Override at deploy time with the S3 website URL or CloudFront domain,
+      e.g. --parameter-overrides CorsAllowedOrigins=https://my-bucket.s3-website.amazonaws.com
 
   CloudWatchNamespace:
     Type: String
@@ -157,6 +161,28 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+      Tags:
+        - Key: Project
+          Value: CloudPulse
+
+  # ── DynamoDB: Metrics Table ───────────────────────────────────────────────
+  MetricsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub cloudpulse-metrics-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      AttributeDefinitions:
+        - AttributeName: resource_id
+          AttributeType: S
+        - AttributeName: window_key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: resource_id
+          KeyType: HASH
+        - AttributeName: window_key
+          KeyType: RANGE
       Tags:
         - Key: Project
           Value: CloudPulse
@@ -317,6 +343,13 @@ Resources:
               detail:
                 alarmName:
                   - prefix: cloudpulse-
+                  # A-14 FIX: Exclude SERVICE_HEALTH composite alarms.
+                  # SERVICE_HEALTH is not a FailureType enum member — routing it
+                  # to the Recovery Lambda causes a parse error and silent event loss.
+                  # Primary metric alarms (HIGH_CPU, NETWORK_LATENCY, STORAGE_EXHAUSTION)
+                  # are sufficient to trigger autonomous recovery.
+                  - anything-but:
+                      suffix: -SERVICE_HEALTH
                 state:
                   value:
                     - ALARM
@@ -691,11 +724,30 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
-                  - dynamodb:Scan
+                  # A-18 FIX: Removed dynamodb:Scan — Query on ResourceIndex GSI is sufficient
+                  # for resource-filtered incident lookups. Full Scan is not needed.
                   - dynamodb:Query
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
                 Resource:
                   - !GetAtt IncidentsTable.Arn
                   - !Sub ${IncidentsTable.Arn}/index/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt MetricsTable.Arn
+        - PolicyName: ApiSNSPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref NotificationsTopic
         - PolicyName: ApiCloudWatchPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -774,14 +826,27 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:PutItem
                   - dynamodb:UpdateItem
                 Resource: !GetAtt ResourcesTable.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:Scan
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
                 Resource: !GetAtt IncidentsTable.Arn
+        - PolicyName: RecoveryCloudWatchPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cloudwatch:PutMetricData
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    cloudwatch:namespace: !Ref CloudWatchNamespace
         - PolicyName: RecoverySNSPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -832,6 +897,12 @@ Outputs:
     Value: !Ref IncidentsTable
     Export:
       Name: !Sub ${AWS::StackName}-IncidentsTable
+
+  MetricsTableName:
+    Description: DynamoDB reliability metrics table name
+    Value: !Ref MetricsTable
+    Export:
+      Name: !Sub ${AWS::StackName}-MetricsTable
 
   NotificationsTopicArn:
     Description: SNS notifications topic ARN

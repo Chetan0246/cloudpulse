@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { ReliabilityMetric } from './types';
+import type { ReliabilityMetric, FleetReliabilityOverview } from './types';
 
 export const metricsApi = {
   list: (params?: { resource_id?: string; window_type?: string; limit?: number }): Promise<ReliabilityMetric[]> =>
@@ -11,4 +11,12 @@ export const metricsApi = {
         params: { window_type: windowType },
       })
       .then((r) => r.data),
+
+  getOverview: (windowType: string = 'DAILY'): Promise<FleetReliabilityOverview> =>
+    apiClient
+      .get<FleetReliabilityOverview>('/metrics/overview', {
+        params: { window_type: windowType },
+      })
+      .then((r) => r.data),
 };
+

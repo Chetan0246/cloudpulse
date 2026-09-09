@@ -31,6 +31,7 @@ vi.mock('../api/metrics', () => ({
   metricsApi: {
     list: vi.fn(),
     getLatest: vi.fn(),
+    getOverview: vi.fn(),
   },
 }));
 
@@ -52,6 +53,7 @@ describe('Dashboard Component', () => {
     ]);
     vi.mocked(incidentsApi.list).mockResolvedValue([]);
     vi.mocked(metricsApi.list).mockResolvedValue([]);
+    vi.mocked(metricsApi.getOverview).mockResolvedValue(null as any);
 
     render(<Dashboard />);
 

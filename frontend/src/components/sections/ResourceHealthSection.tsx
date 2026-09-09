@@ -97,6 +97,32 @@ export const ResourceHealthSection: React.FC<ResourceHealthSectionProps> = ({
         </div>
       </div>
 
+      {/* Fleet Telemetry Quick Strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+        <div className="bg-slate-900/60 border border-slate-800 p-3 rounded-lg flex items-center justify-between">
+          <span className="text-slate-400">Total Nodes</span>
+          <span className="text-slate-200 font-bold text-sm">{resources.length}</span>
+        </div>
+        <div className="bg-emerald-950/20 border border-emerald-800/40 p-3 rounded-lg flex items-center justify-between">
+          <span className="text-slate-400">Nominal</span>
+          <span className="text-emerald-400 font-bold text-sm">
+            {resources.filter((r) => r.current_state === 'HEALTHY' || r.current_state === 'RECOVERED').length}
+          </span>
+        </div>
+        <div className="bg-amber-950/20 border border-amber-800/40 p-3 rounded-lg flex items-center justify-between">
+          <span className="text-slate-400">Warning</span>
+          <span className="text-amber-400 font-bold text-sm">
+            {resources.filter((r) => r.current_state === 'WARNING').length}
+          </span>
+        </div>
+        <div className="bg-rose-950/20 border border-rose-800/40 p-3 rounded-lg flex items-center justify-between">
+          <span className="text-slate-400">Anomalous / Self-Healing</span>
+          <span className="text-rose-400 font-bold text-sm">
+            {resources.filter((r) => r.current_state !== 'HEALTHY' && r.current_state !== 'RECOVERED' && r.current_state !== 'WARNING').length}
+          </span>
+        </div>
+      </div>
+
       {filteredResources.length === 0 ? (
         <EmptyState
           title="No Resources Found"

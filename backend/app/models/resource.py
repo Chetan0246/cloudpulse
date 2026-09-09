@@ -14,6 +14,7 @@ Design notes:
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, cast
@@ -300,9 +301,7 @@ class SimulatedResource(BaseModel):
             raise ValueError("resource_id must not be empty")
         if len(v) > 64:
             raise ValueError("resource_id must not exceed 64 characters")
-        # Allowed characters: alphanumeric and hyphens
-        import re
-
+        # Allowed characters: alphanumeric and hyphens (re imported at module level — A-09)
         if not re.fullmatch(r"[A-Z0-9][A-Z0-9\-]{0,63}", v):
             raise ValueError(
                 "resource_id may only contain uppercase letters, digits, and hyphens, "

@@ -195,13 +195,17 @@ def test_failed_recovery_transitions_to_recovery_failed():
     last_call = mock_resource_repo.update_state.call_args_list[-1]
     assert last_call.args[1] == ResourceState.RECOVERY_FAILED
 
-def test_invalid_event_returns_400():
+def test_invalid_event_raises_for_dlq():
+    """A-06 fix: Unparseable event raises ValueError so Lambda retry policy and DLQ engage."""
+    import pytest
     h = _load_recovery_handler()
     event = {"source": "unknown"}
-    result = h.handler(event, {})
-    assert result["statusCode"] == 400
+    with pytest.raises(ValueError, match="Cannot parse event"):
+        h.handler(event, {})
 
 def test_unknown_failure_type_in_alarm_name():
+    """A-06 fix: Unknown alarm suffix raises ValueError — routed to DLQ, not silently swallowed."""
+    import pytest
     h = _load_recovery_handler()
     event = {
         "source": "aws.cloudwatch",
@@ -209,8 +213,8 @@ def test_unknown_failure_type_in_alarm_name():
             "alarmName": "cloudpulse-VM-001-UNKNOWN_FAILURE"
         }
     }
-    result = h.handler(event, {})
-    assert result["statusCode"] == 400
+    with pytest.raises(ValueError, match="Cannot parse event"):
+        h.handler(event, {})
 
 def test_resource_metrics_reset_after_recovery():
     h = _load_recovery_handler()

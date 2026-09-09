@@ -218,6 +218,7 @@ class MonitoringService:
             "severity": resource.active_failure_type.default_severity(),
             "scenarioCode": scenario_code,
             "incidentId": incident_id,
+            "correlationId": incident_id,
             "detectedAt": resource.updated_at.isoformat(),
         }
 
@@ -235,9 +236,11 @@ class MonitoringService:
             logger.info(
                 "EventBridge FailureInjected event emitted",
                 extra={
+                    "stage": "event",
                     "resource_id": resource.resource_id,
                     "scenario_code": scenario_code,
                     "incident_id": incident_id,
+                    "correlation_id": incident_id,
                 },
             )
             return True

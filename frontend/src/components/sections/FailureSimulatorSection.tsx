@@ -109,6 +109,30 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
   const [createdIncidentId, setCreatedIncidentId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [stageTimestamps, setStageTimestamps] = useState<Record<string, string>>({});
+  const [sreLogs, setSreLogs] = useState<
+    Array<{ id: string; time: string; stage: LifecycleStage; system: string; text: string }>
+  >([
+    {
+      id: 'init-1',
+      time: new Date().toLocaleTimeString(),
+      stage: 'HEALTHY',
+      system: 'FLEET',
+      text: 'Probes active. Listening for CloudWatch alarm events on EventBridge default bus.',
+    },
+  ]);
+
+  const addSreLog = (stage: LifecycleStage, system: string, text: string) => {
+    setSreLogs((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        time: new Date().toLocaleTimeString(),
+        stage,
+        system,
+        text,
+      },
+    ]);
+  };
 
   const selectedScenario =
     SCENARIOS.find((s) => s.type === scenarioType) || SCENARIOS[0];
@@ -153,10 +177,20 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
     try {
       // 1. Healthy baseline confirmed
       recordStageTime('HEALTHY');
+      addSreLog(
+        'HEALTHY',
+        'FLEET',
+        `Baseline telemetry confirmed on ${resourceId}. Health: HEALTHY. Probes nominal.`
+      );
 
       // 2. Failure: Workload fault injected (optimistic transition)
       setActiveStage('FAILURE');
       recordStageTime('FAILURE');
+      addSreLog(
+        'FAILURE',
+        'CHAOS',
+        `Workload anomaly injected: ${selectedScenario.code} (${selectedScenario.name}) with ${severity} severity.`
+      );
 
       // Small 400ms pause for visible UI transition
       await new Promise((resolve) => setTimeout(resolve, 400));
@@ -173,6 +207,16 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
 
       setActiveStage('DETECTION');
       recordStageTime('DETECTION');
+      addSreLog(
+        'DETECTION',
+        'CLOUDWATCH',
+        `Threshold breach on ${selectedScenario.metric} (${selectedScenario.alarmThreshold}). CloudWatch Alarm fired.`
+      );
+      addSreLog(
+        'DETECTION',
+        'EVENTBRIDGE',
+        `EventBridge captured Alarm State Change. Dispatching to Recovery Lambda orchestrator.`
+      );
       setIsInjecting(false);
 
       // If Auto-Heal is enabled, automatically execute the self-healing recovery step
@@ -186,6 +230,7 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
       const msg =
         err.response?.data?.detail || err.message || 'Failed to trigger simulated failure';
       setErrorMessage(msg);
+      addSreLog('FAILURE', 'ERROR', `Failure injection failed: ${msg}`);
       setActiveStage('HEALTHY');
     }
   };
@@ -198,6 +243,11 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
       // 4. Recovery: Engage Self-Healing Engine
       setActiveStage('RECOVERY');
       recordStageTime('RECOVERY');
+      addSreLog(
+        'RECOVERY',
+        'LAMBDA',
+        `Recovery Lambda executing strategy: ${selectedScenario.recoveryStrategy.split('—')[0]}. State: RECOVERING.`
+      );
 
       // Simulate recovery processing delay (800ms)
       await new Promise((resolve) => setTimeout(resolve, 800));
@@ -209,9 +259,20 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
       // 5. Recovered: Success & nominal metrics restored
       setActiveStage('RECOVERED');
       recordStageTime('RECOVERED');
+      addSreLog(
+        'RECOVERED',
+        'REMEDIATION',
+        `Remediation complete. Metric targets normalized. State: RECOVERED. Incident marked RESOLVED.`
+      );
+      addSreLog(
+        'RECOVERED',
+        'SNS',
+        `Dispatched SNS recovery confirmation alert to on-call reliability engineers.`
+      );
     } catch (err: any) {
       const msg = err.response?.data?.detail || err.message || 'Failed to execute recovery';
       setErrorMessage(msg);
+      addSreLog('RECOVERY', 'ERROR', `Remediation execution failed: ${msg}`);
     } finally {
       setIsRecovering(false);
     }
@@ -223,6 +284,7 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
     try {
       await onResetResource(resourceId);
       setActiveStage('HEALTHY');
+      addSreLog('HEALTHY', 'MANUAL', `Resource '${resourceId}' manually reset to HEALTHY baseline.`);
       setLastResult({
         message: `Resource '${resourceId}' successfully reset to HEALTHY.`,
         resource: { ...targetResource, current_state: 'HEALTHY' },
@@ -241,6 +303,7 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
     stage: LifecycleStage;
     number: string;
     label: string;
+    stageTag: string;
     icon: string;
     detail: string;
   }> = [
@@ -248,6 +311,7 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
       stage: 'HEALTHY',
       number: '1',
       label: 'Healthy',
+      stageTag: 'HEALTHY',
       icon: '🛡️',
       detail: 'Nominal Baseline — metrics within green threshold',
     },
@@ -255,6 +319,7 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
       stage: 'FAILURE',
       number: '2',
       label: 'Failure',
+      stageTag: 'FAILURE',
       icon: '⚡',
       detail: 'Workload Fault — simulated anomaly injected into instance',
     },
@@ -262,6 +327,7 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
       stage: 'DETECTION',
       number: '3',
       label: 'Detection',
+      stageTag: 'DETECTED',
       icon: '🔔',
       detail: 'Alarm Triggered — CloudWatch breaches threshold, incident opened',
     },
@@ -269,6 +335,7 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
       stage: 'RECOVERY',
       number: '4',
       label: 'Recovery',
+      stageTag: 'RECOVERING',
       icon: '🛠️',
       detail: 'Self-Healing — EventBridge routes to Recovery Lambda',
     },
@@ -276,6 +343,7 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
       stage: 'RECOVERED',
       number: '5',
       label: 'Recovered',
+      stageTag: 'RECOVERED',
       icon: '✅',
       detail: 'SLO Restored — strategy executed, metrics normalized',
     },
@@ -299,29 +367,36 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
   return (
     <div className="space-y-6">
       {/* Introduction Card */}
-      <div className="bg-gradient-to-r from-indigo-950/40 via-slate-900 to-slate-900 border border-indigo-500/30 rounded-xl p-5 shadow-lg">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="bg-gradient-to-r from-indigo-950/50 via-slate-900 to-slate-900 border border-indigo-500/40 rounded-xl p-5 shadow-xl relative overflow-hidden">
+        <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
           <div>
-            <h2 className="text-base font-bold text-slate-100 font-mono flex items-center space-x-2">
-              <span>⚡</span>
-              <span>Chaos Engineering & Fault Injection Simulator</span>
-            </h2>
-            <p className="text-xs text-slate-300 mt-1 max-w-2xl">
+            <div className="flex items-center space-x-2">
+              <span className="text-2xl animate-pulse">⚡</span>
+              <h2 className="text-base font-bold text-slate-100 font-mono tracking-tight">
+                Chaos Engineering & Fault Injection Simulator
+              </h2>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/40">
+                LIVE TELEMETRY
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 mt-1 max-w-2xl font-mono">
               Simulates the full autonomous reliability lifecycle:
               Healthy → Failure → Detection → Recovery → Recovered.
             </p>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-3">
             <span className="text-xs font-mono text-slate-300">Auto Self-Healing:</span>
             <button
               onClick={() => setAutoHeal(!autoHeal)}
-              className={`px-2.5 py-1 rounded text-xs font-mono font-semibold transition-colors border ${
+              aria-label="Toggle Auto Self-Healing"
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all border ${
                 autoHeal
-                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 shadow-sm shadow-emerald-500/20'
                   : 'bg-slate-800 text-slate-400 border-slate-700'
               }`}
             >
-              {autoHeal ? 'ON (Auto-Recover)' : 'OFF (Manual Step)'}
+              {autoHeal ? '● ON (Auto-Recover)' : '○ OFF (Manual Step)'}
             </button>
           </div>
         </div>
@@ -333,22 +408,84 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
         subtitle="Real-time progression from baseline health through fault injection and autonomous remediation"
         badge={
           <span
-            className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold border ${
+            className={`px-2.5 py-0.5 rounded text-[11px] font-mono font-bold border ${
               activeStage === 'HEALTHY'
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
                 : activeStage === 'FAILURE'
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 animate-pulse'
                 : activeStage === 'DETECTION'
-                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40 animate-pulse'
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/50 animate-pulse'
                 : activeStage === 'RECOVERY'
-                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40 animate-pulse'
-                : 'bg-teal-500/20 text-teal-300 border-teal-500/40'
+                ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50 animate-pulse'
+                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
             }`}
           >
             STAGE: {activeStage}
           </span>
         }
       >
+        {/* Prominent Demo Sequence Stepper Bar */}
+        <div className="mb-4 p-3 rounded-xl bg-slate-950/90 border border-slate-800 flex flex-wrap items-center justify-between gap-2 text-xs font-mono font-bold">
+          <div className="text-[11px] text-slate-400 font-semibold tracking-wider uppercase mr-2">
+            SRE Pipeline:
+          </div>
+          <div className="flex flex-wrap items-center gap-2 flex-1 justify-center sm:justify-start">
+            <span
+              className={`px-2 py-1 rounded transition-all ${
+                activeStage === 'HEALTHY'
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-sm shadow-emerald-500/30 ring-1 ring-emerald-400'
+                  : 'text-slate-400'
+              }`}
+            >
+              HEALTHY
+            </span>
+            <span className="text-slate-600 font-bold">↓</span>
+            <span
+              className={`px-2 py-1 rounded transition-all ${
+                activeStage === 'FAILURE'
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/50 shadow-sm shadow-amber-500/30 ring-1 ring-amber-400 animate-pulse'
+                  : 'text-slate-400'
+              }`}
+            >
+              FAILURE
+            </span>
+            <span className="text-slate-600 font-bold">↓</span>
+            <span
+              className={`px-2 py-1 rounded transition-all ${
+                activeStage === 'DETECTION'
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/50 shadow-sm shadow-rose-500/30 ring-1 ring-rose-400 animate-pulse'
+                  : 'text-slate-400'
+              }`}
+            >
+              DETECTED
+            </span>
+            <span className="text-slate-600 font-bold">↓</span>
+            <span
+              className={`px-2 py-1 rounded transition-all ${
+                activeStage === 'RECOVERY'
+                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50 shadow-sm shadow-cyan-500/30 ring-1 ring-cyan-400 animate-pulse'
+                  : 'text-slate-400'
+              }`}
+            >
+              RECOVERING
+            </span>
+            <span className="text-slate-600 font-bold">↓</span>
+            <span
+              className={`px-2 py-1 rounded transition-all ${
+                activeStage === 'RECOVERED'
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 shadow-sm shadow-emerald-500/30 ring-1 ring-emerald-400'
+                  : 'text-slate-400'
+              }`}
+            >
+              RECOVERED
+            </span>
+          </div>
+          <div className="text-[11px] text-indigo-400 hidden lg:block">
+            Target: <strong className="text-slate-200">{resourceId}</strong> ({scenarioType})
+          </div>
+        </div>
+
+        {/* 5 Distinct Stage Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 py-2">
           {lifecycleSteps.map((step, idx) => {
             const status = getStepStatus(step.stage, idx);
@@ -359,15 +496,15 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
             let borderStyle = 'border-slate-800 bg-slate-950/60 text-slate-500';
             if (isCurrent) {
               if (step.stage === 'HEALTHY')
-                borderStyle = 'border-emerald-500 bg-emerald-950/30 text-emerald-300 ring-2 ring-emerald-500/30';
+                borderStyle = 'border-emerald-500 bg-emerald-950/30 text-emerald-300 ring-2 ring-emerald-500/40 shadow-lg shadow-emerald-950/50';
               else if (step.stage === 'FAILURE')
-                borderStyle = 'border-amber-500 bg-amber-950/30 text-amber-300 ring-2 ring-amber-500/30 animate-pulse';
+                borderStyle = 'border-amber-500 bg-amber-950/30 text-amber-300 ring-2 ring-amber-500/40 shadow-lg shadow-amber-950/50 animate-pulse';
               else if (step.stage === 'DETECTION')
-                borderStyle = 'border-rose-500 bg-rose-950/40 text-rose-300 ring-2 ring-rose-500/40 animate-pulse';
+                borderStyle = 'border-rose-500 bg-rose-950/40 text-rose-300 ring-2 ring-rose-500/40 shadow-lg shadow-rose-950/50 animate-pulse';
               else if (step.stage === 'RECOVERY')
-                borderStyle = 'border-cyan-500 bg-cyan-950/40 text-cyan-300 ring-2 ring-cyan-500/40 animate-pulse';
+                borderStyle = 'border-cyan-500 bg-cyan-950/40 text-cyan-300 ring-2 ring-cyan-500/40 shadow-lg shadow-cyan-950/50 animate-pulse';
               else if (step.stage === 'RECOVERED')
-                borderStyle = 'border-teal-500 bg-teal-950/40 text-teal-300 ring-2 ring-teal-500/40';
+                borderStyle = 'border-emerald-500 bg-emerald-950/40 text-emerald-300 ring-2 ring-emerald-500/40 shadow-lg shadow-emerald-950/50';
             } else if (isDone) {
               borderStyle = 'border-emerald-500/50 bg-slate-950/90 text-emerald-400';
             }
@@ -375,21 +512,29 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
             return (
               <div
                 key={step.stage}
-                className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between font-mono ${borderStyle}`}
+                className={`p-3.5 rounded-xl border transition-all duration-300 flex flex-col justify-between font-mono relative overflow-hidden ${borderStyle}`}
               >
+                {isCurrent && (
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-current opacity-80" />
+                )}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-xl">{step.icon}</span>
-                    <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">
-                      {isDone ? '✓' : step.number}
-                    </span>
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-xs font-bold px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">
+                        {isDone ? '✓' : step.number}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-xs font-bold text-slate-100">{step.label}</div>
+                  <div className="flex items-baseline space-x-1">
+                    <span className="text-xs font-bold text-slate-100">{step.label}</span>
+                    <span className="text-[10px] text-slate-400">({step.stageTag})</span>
+                  </div>
                   <p className="text-[10px] text-slate-400 mt-1 leading-snug">{step.detail}</p>
                 </div>
                 {timestamp && (
                   <div className="text-[10px] text-slate-500 mt-3 pt-2 border-t border-slate-800/80">
-                    Time: <span className="text-slate-300">{timestamp}</span>
+                    Time: <span className="text-slate-300 font-semibold">{timestamp}</span>
                   </div>
                 )}
               </div>
@@ -397,16 +542,37 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
           })}
         </div>
 
+        {/* Live Recovery Animation Box when Recovering */}
+        {activeStage === 'RECOVERY' && (
+          <div className="mt-4 p-4 rounded-xl bg-cyan-950/30 border border-cyan-500/50 text-xs font-mono space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-cyan-300 font-bold">
+                <span className="animate-spin text-sm">🔄</span>
+                <span>Self-Healing Engine Executing Remediation Strategy</span>
+              </div>
+              <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[10px]">
+                LAMBDA ACTIVE
+              </span>
+            </div>
+            <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-cyan-900">
+              <div className="h-full bg-gradient-to-r from-cyan-500 via-indigo-500 to-emerald-400 animate-pulse w-full" />
+            </div>
+            <p className="text-[11px] text-slate-300">
+              Applying automated action <strong className="text-cyan-400">{selectedScenario.recoveryStrategy.split('—')[0]}</strong> to <strong className="text-slate-100">{resourceId}</strong>. Normalizing telemetry thresholds and resetting health metrics.
+            </p>
+          </div>
+        )}
+
         {/* Manual Recovery Step Action when Auto-Heal is OFF */}
         {!autoHeal && activeStage === 'DETECTION' && (
-          <div className="mt-4 p-3.5 rounded-xl bg-cyan-950/30 border border-cyan-500/40 flex items-center justify-between">
+          <div className="mt-4 p-3.5 rounded-xl bg-cyan-950/30 border border-cyan-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="text-xs font-mono text-cyan-300">
               ⚡ Failure detected! Ready to execute automated self-healing strategy.
             </div>
             <button
               onClick={handleTriggerRecovery}
               disabled={isRecovering}
-              className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold rounded-lg transition-colors flex items-center space-x-1"
+              className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-mono font-bold rounded-lg transition-colors flex items-center space-x-1 self-start sm:self-auto cursor-pointer"
             >
               <span>{isRecovering ? '🔄' : '🛠️'}</span>
               <span>{isRecovering ? 'Recovering...' : 'Initiate Self-Healing (Lambda)'}</span>
@@ -610,6 +776,64 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
           )}
         </div>
       </div>
+
+      {/* SRE Operations Live Console Terminal */}
+      <Panel
+        title="SRE Closed-Loop Operations Log"
+        subtitle="Real-time execution trace of CloudWatch alarms, EventBridge routing, and Lambda remediation"
+        action={
+          <button
+            onClick={() => setSreLogs([])}
+            className="text-[11px] font-mono text-slate-400 hover:text-slate-200 px-2 py-0.5 rounded bg-slate-800 border border-slate-700 transition-colors"
+          >
+            Clear Console
+          </button>
+        }
+      >
+        <div className="bg-slate-950 rounded-xl p-4 border border-slate-800 font-mono text-xs shadow-inner">
+          <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-800/80 text-[11px] text-slate-400">
+            <div className="flex items-center space-x-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 inline-block" />
+              <span className="text-slate-300 ml-2 font-semibold">cloudpulse-ops-daemon://event-bus/trace</span>
+            </div>
+            <span className="text-[10px] text-cyan-400 font-semibold">AWS EVENTSTREAM: CONNECTED</span>
+          </div>
+
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+            {sreLogs.length === 0 ? (
+              <div className="text-slate-600 text-[11px] py-4 text-center">
+                Console cleared. Trigger a failure scenario to stream real-time events.
+              </div>
+            ) : (
+              sreLogs.map((log) => {
+                let badgeClass = 'bg-slate-800 text-slate-300';
+                if (log.stage === 'HEALTHY') badgeClass = 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40';
+                else if (log.stage === 'FAILURE') badgeClass = 'bg-amber-950/60 text-amber-400 border border-amber-800/40';
+                else if (log.stage === 'DETECTION') badgeClass = 'bg-rose-950/60 text-rose-400 border border-rose-800/40';
+                else if (log.stage === 'RECOVERY') badgeClass = 'bg-cyan-950/60 text-cyan-400 border border-cyan-800/40';
+                else if (log.stage === 'RECOVERED') badgeClass = 'bg-teal-950/60 text-teal-400 border border-teal-800/40';
+
+                return (
+                  <div key={log.id} className="flex items-start space-x-2 text-[11px] leading-relaxed">
+                    <span className="text-slate-600 select-none">[{log.time}]</span>
+                    <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${badgeClass}`}>
+                      [{log.system}]
+                    </span>
+                    <span className="text-slate-300 flex-1">{log.text}</span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div className="mt-2 pt-2 border-t border-slate-900 text-[10px] text-slate-500 flex items-center space-x-1">
+            <span className="text-emerald-400">●</span>
+            <span>Target: {resourceId} ({selectedScenario.code})</span>
+            <span className="animate-pulse ml-1 text-cyan-400 font-bold">_</span>
+          </div>
+        </div>
+      </Panel>
     </div>
   );
 };

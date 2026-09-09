@@ -103,6 +103,39 @@ describe('API Client & Endpoints Integration', () => {
       });
       expect(res.mttr_seconds).toBe(5.2);
     });
+
+    it('calls GET /metrics/overview', async () => {
+      vi.spyOn(apiClient, 'get').mockResolvedValue({
+        data: {
+          incident_count: 5,
+          recovery_success_rate_pct: 100.0,
+          recovery_failure_rate_pct: 0.0,
+          avg_recovery_time_seconds: 6.4,
+          mttr_seconds: 8.2,
+          avg_detection_time_seconds: 4.1,
+          incident_frequency_per_hour: 1.25,
+          incident_frequency_per_day: 30.0,
+          mtbf_seconds: 2880,
+          health_distribution: {
+            total_resources: 4,
+            healthy_count: 4,
+            warning_count: 0,
+            failed_count: 0,
+            recovering_count: 0,
+            healthy_pct: 100.0,
+            by_state: { HEALTHY: 4 },
+            by_status: { HEALTHY: 4 },
+          },
+        },
+      });
+
+      const res = await metricsApi.getOverview('DAILY');
+      expect(apiClient.get).toHaveBeenCalledWith('/metrics/overview', {
+        params: { window_type: 'DAILY' },
+      });
+      expect(res.incident_count).toBe(5);
+      expect(res.health_distribution.healthy_pct).toBe(100.0);
+    });
   });
 
   describe('simulateApi', () => {

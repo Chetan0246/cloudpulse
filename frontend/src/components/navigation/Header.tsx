@@ -5,6 +5,7 @@ interface HeaderProps {
   isPolling: boolean;
   onTogglePolling: () => void;
   onManualRefresh: () => void;
+  onSimulateFailure?: () => void;
   lastUpdated: Date | null;
   activeIncidentsCount: number;
   apiConnected?: boolean | null;
@@ -17,6 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   isPolling,
   onTogglePolling,
   onManualRefresh,
+  onSimulateFailure,
   lastUpdated,
   activeIncidentsCount,
   apiConnected = true,
@@ -116,6 +118,17 @@ export const Header: React.FC<HeaderProps> = ({
               Synced: <span className="text-slate-200">{formatTime(lastUpdated)}</span>
             </span>
           </div>
+
+          {onSimulateFailure && (
+            <button
+              onClick={onSimulateFailure}
+              title="Open Chaos Engineering & Failure Simulator"
+              className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-rose-600 via-amber-600 to-rose-600 hover:from-rose-500 hover:via-amber-500 hover:to-rose-500 text-white font-bold text-xs font-mono shadow-md shadow-rose-950/50 border border-rose-400/50 flex items-center space-x-1.5 transition-all transform hover:scale-105 active:scale-95 cursor-pointer focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 focus:ring-offset-slate-950"
+            >
+              <span className="animate-pulse text-sm">⚡</span>
+              <span>Simulate Failure</span>
+            </button>
+          )}
 
           <button
             onClick={onTogglePolling}

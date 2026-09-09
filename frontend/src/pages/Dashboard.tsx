@@ -5,6 +5,7 @@ import type {
   ReliabilityMetric,
   FailureType,
   IncidentSeverity,
+  FleetReliabilityOverview,
 } from '../api/types';
 import { healthApi } from '../api/health';
 import { resourcesApi } from '../api/resources';
@@ -34,6 +35,7 @@ export const Dashboard: React.FC = () => {
   const [resources, setResources] = useState<ResourceSummary[]>([]);
   const [incidents, setIncidents] = useState<IncidentSummary[]>([]);
   const [metrics, setMetrics] = useState<ReliabilityMetric[]>([]);
+  const [metricsOverview, setMetricsOverview] = useState<FleetReliabilityOverview | null>(null);
 
   const [activeTab, setActiveTab] = useState<SectionTabId>('overview');
   const [selectedIncidentId, setSelectedIncidentId] = useState<string | undefined>();
@@ -71,18 +73,20 @@ export const Dashboard: React.FC = () => {
     try {
       setFetchError(null);
 
-      // Verify health probe alongside resources, incidents, and metrics
-      const [healthRes, resList, incList, metList] = await Promise.all([
+      // Verify health probe alongside resources, incidents, metrics snapshots, and fleet SRE overview
+      const [healthRes, resList, incList, metList, overviewRes] = await Promise.all([
         healthApi.check().catch(() => null),
         resourcesApi.list().catch(() => [] as ResourceSummary[]),
         incidentsApi.list({ limit: 100 }).catch(() => [] as IncidentSummary[]),
         metricsApi.list({ window_type: metricsWindow, limit: 50 }).catch(() => [] as ReliabilityMetric[]),
+        metricsApi.getOverview(metricsWindow).catch(() => null),
       ]);
 
       setApiConnected(healthRes?.status === 'ok' || resList.length > 0);
       setResources(resList);
       setIncidents(incList);
       setMetrics(metList);
+      setMetricsOverview(overviewRes);
       setLastUpdated(new Date());
     } catch (err: any) {
       console.error('[Telemetry Sync Error]', err);
@@ -224,6 +228,7 @@ export const Dashboard: React.FC = () => {
         isPolling={isPolling}
         onTogglePolling={() => setIsPolling(!isPolling)}
         onManualRefresh={() => fetchAllTelemetry(true)}
+        onSimulateFailure={() => setActiveTab('simulator')}
         lastUpdated={lastUpdated}
         activeIncidentsCount={activeIncidents.length}
         apiConnected={apiConnected}
@@ -258,8 +263,10 @@ export const Dashboard: React.FC = () => {
               <OverviewSection
                 resources={resources}
                 incidents={incidents}
+                overview={metricsOverview}
                 onSelectIncident={handleSelectIncident}
                 onNavigateTab={setActiveTab}
+                onSimulateForResource={handleSimulateForResource}
               />
             )}
 
@@ -308,6 +315,7 @@ export const Dashboard: React.FC = () => {
             {activeTab === 'metrics' && (
               <ReliabilityMetricsSection
                 metrics={metrics}
+                overview={metricsOverview}
                 selectedWindow={metricsWindow}
                 onChangeWindow={setMetricsWindow}
               />

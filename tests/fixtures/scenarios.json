@@ -1,0 +1,79 @@
+{
+  "scenarios": [
+    {
+      "id": "FS-01",
+      "name": "High CPU Utilization",
+      "failure_type": "HIGH_CPU",
+      "target_resource": "VM-001",
+      "target_metric": "CPUUtilization",
+      "threshold": 85.0,
+      "comparison": "GreaterThanOrEqualToThreshold",
+      "nominal_value": 25.0,
+      "fault_value": 92.0,
+      "alarm_name": "cloudpulse-VM-001-HIGH_CPU",
+      "recovery_action": "SCALE_OUT",
+      "post_recovery_metric": "cpu_utilization",
+      "post_recovery_expected": 25.0
+    },
+    {
+      "id": "FS-02",
+      "name": "Service Failure",
+      "failure_type": "SERVICE_FAILURE",
+      "target_resource": "API-001",
+      "target_metric": "NetworkLatency",
+      "threshold": 500.0,
+      "comparison": "GreaterThanOrEqualToThreshold",
+      "nominal_value": 20.0,
+      "fault_value": 2000.0,
+      "alarm_name": "cloudpulse-API-001-NETWORK_LATENCY",
+      "recovery_action": "SERVICE_RESTART",
+      "post_recovery_metric": "network_latency_ms",
+      "post_recovery_expected": 15.0
+    },
+    {
+      "id": "FS-03",
+      "name": "Storage Exhaustion",
+      "failure_type": "STORAGE_EXHAUSTION",
+      "target_resource": "STORAGE-001",
+      "target_metric": "StorageUtilization",
+      "threshold": 90.0,
+      "comparison": "GreaterThanOrEqualToThreshold",
+      "nominal_value": 45.0,
+      "fault_value": 96.0,
+      "alarm_name": "cloudpulse-STORAGE-001-STORAGE_EXHAUSTION",
+      "recovery_action": "STORAGE_CLEANUP",
+      "post_recovery_metric": "storage_utilization",
+      "post_recovery_expected": 20.0
+    },
+    {
+      "id": "FS-04",
+      "name": "Network Latency",
+      "failure_type": "NETWORK_LATENCY",
+      "target_resource": "VM-001",
+      "target_metric": "NetworkLatency",
+      "threshold": 500.0,
+      "comparison": "GreaterThanOrEqualToThreshold",
+      "nominal_value": 15.0,
+      "fault_value": 850.0,
+      "alarm_name": "cloudpulse-VM-001-NETWORK_LATENCY",
+      "recovery_action": "NETWORK_REROUTE",
+      "post_recovery_metric": "network_latency_ms",
+      "post_recovery_expected": 15.0
+    },
+    {
+      "id": "FS-05",
+      "name": "Service Downtime",
+      "failure_type": "SERVICE_DOWNTIME",
+      "target_resource": "DB-001",
+      "target_metric": "NetworkLatency",
+      "threshold": 500.0,
+      "comparison": "GreaterThanOrEqualToThreshold",
+      "nominal_value": 10.0,
+      "fault_value": 9999.0,
+      "alarm_name": "cloudpulse-DB-001-NETWORK_LATENCY",
+      "recovery_action": "FAILOVER",
+      "post_recovery_metric": "network_latency_ms",
+      "post_recovery_expected": 15.0
+    }
+  ]
+}

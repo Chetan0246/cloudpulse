@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 
 from app.exceptions import MetricNotFoundError
 from app.models.reliability_metric import (
+    FleetReliabilityOverview,
     MetricWindowType,
     ReliabilityMetric,
     ReliabilityMetricSummary,
@@ -61,6 +62,35 @@ def list_metrics(
         resource_id=resource_id,
         window_type=window_type,
         limit=limit,
+    )
+
+
+@router.get(
+    "/overview",
+    response_model=FleetReliabilityOverview,
+    summary="Get comprehensive fleet reliability & observability report",
+)
+@router.get(
+    "/summary",
+    response_model=FleetReliabilityOverview,
+    summary="Alias for /metrics/overview",
+    include_in_schema=False,
+)
+def get_metrics_overview(
+    resource_id: str | None = Query(
+        None,
+        description="Filter overview by resource ID",
+    ),
+    window_type: MetricWindowType | None = Query(
+        None,
+        description="Filter overview by window type (DAILY, WEEKLY, CUMULATIVE)",
+    ),
+    service: MetricService = Depends(get_metric_service),
+) -> FleetReliabilityOverview:
+    """Return all 8 core SRE reliability indicators computed directly from stored records."""
+    return service.get_fleet_reliability_overview(
+        resource_id=resource_id,
+        window_type=window_type,
     )
 
 

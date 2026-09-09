@@ -386,8 +386,13 @@ class TestIdempotencyGuard:
         # update_state must NOT have been called (pre-read short-circuits)
         mock_repo.update_state.assert_not_called()
 
-    def test_invalid_event_returns_400(self) -> None:
-        """Unparseable event must return HTTP 400, not raise an exception."""
+    def test_invalid_event_raises_for_dlq(self) -> None:
+        """Unparseable event must now RAISE (not return 400) so the DLQ is triggered.
+
+        A-06 fix: Returning HTTP 400 caused Lambda to mark the invocation successful,
+        bypassing the DLQ. Raising causes Lambda retry policy and DLQ to engage.
+        """
+        import pytest
         h = _load_recovery_handler()
 
         event = {
@@ -395,8 +400,8 @@ class TestIdempotencyGuard:
             "detail": {},
         }
 
-        result = h.handler(event, MagicMock())
-        assert result["statusCode"] == 400
+        with pytest.raises(ValueError, match="Cannot parse event"):
+            h.handler(event, MagicMock())
 
     def test_state_transition_failure_returns_500(self) -> None:
         """DynamoDB errors during update_state transition return HTTP 500.

@@ -1,38 +1,51 @@
 import React from 'react';
-import type { IncidentSummary, ResourceSummary } from '../../api/types';
+import type { IncidentSummary, ResourceSummary, FleetReliabilityOverview } from '../../api/types';
 import { MetricCard, Panel } from '../common/Card';
 import { SeverityBadge, StatusBadge, FailureTypeBadge } from '../common/Badge';
 import { EmptyState } from '../common/StateViews';
+import { SegmentedHealthBar } from '../common/Charts';
 
 interface OverviewSectionProps {
   resources: ResourceSummary[];
   incidents: IncidentSummary[];
+  overview?: FleetReliabilityOverview | null;
   onSelectIncident: (incidentId: string) => void;
   onNavigateTab: (tabId: any) => void;
+  onSimulateForResource?: (resourceId: string) => void;
 }
 
 export const OverviewSection: React.FC<OverviewSectionProps> = ({
   resources,
   incidents,
+  overview,
   onSelectIncident,
   onNavigateTab,
+  onSimulateForResource,
 }) => {
-  // Counts by resource health/state
-  const healthyCount = resources.filter(
-    (r) => r.current_state === 'HEALTHY' || r.current_state === 'RECOVERED'
-  ).length;
-  const warningCount = resources.filter((r) => r.current_state === 'WARNING').length;
-  const failedCount = resources.filter(
-    (r) =>
-      r.current_state === 'FAILURE_DETECTED' ||
-      r.current_state === 'RECOVERY_FAILED' ||
-      r.current_state === 'MANUAL_INTERVENTION_REQUIRED'
-  ).length;
-  const recoveringCount = resources.filter(
-    (r) =>
-      r.current_state === 'RECOVERY_INITIATED' ||
-      r.current_state === 'RECOVERY_IN_PROGRESS'
-  ).length;
+  // Counts by resource health/state (derived from backend overview or fallback to resources)
+  const healthyCount = overview?.health_distribution
+    ? overview.health_distribution.healthy_count
+    : resources.filter(
+        (r) => r.current_state === 'HEALTHY' || r.current_state === 'RECOVERED'
+      ).length;
+  const warningCount = overview?.health_distribution
+    ? overview.health_distribution.warning_count
+    : resources.filter((r) => r.current_state === 'WARNING').length;
+  const failedCount = overview?.health_distribution
+    ? overview.health_distribution.failed_count
+    : resources.filter(
+        (r) =>
+          r.current_state === 'FAILURE_DETECTED' ||
+          r.current_state === 'RECOVERY_FAILED' ||
+          r.current_state === 'MANUAL_INTERVENTION_REQUIRED'
+      ).length;
+  const recoveringCount = overview?.health_distribution
+    ? overview.health_distribution.recovering_count
+    : resources.filter(
+        (r) =>
+          r.current_state === 'RECOVERY_INITIATED' ||
+          r.current_state === 'RECOVERY_IN_PROGRESS'
+      ).length;
 
   // Incident metrics
   const activeIncidents = incidents.filter(
@@ -44,9 +57,11 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
   );
 
   const recoverySuccessRate =
-    totalFinished.length > 0
-      ? Math.round((resolvedIncidents.length / totalFinished.length) * 100)
-      : 100;
+    overview != null
+      ? Math.round(overview.recovery_success_rate_pct)
+      : totalFinished.length > 0
+        ? Math.round((resolvedIncidents.length / totalFinished.length) * 100)
+        : 100;
 
   // Calculate MTTR (average duration of resolved incidents)
   const resolvedDurations = resolvedIncidents
@@ -54,9 +69,11 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
     .filter((d): d is number => typeof d === 'number' && d > 0);
 
   const avgRecoveryTime =
-    resolvedDurations.length > 0
-      ? (resolvedDurations.reduce((a, b) => a + b, 0) / resolvedDurations.length).toFixed(1)
-      : '0.0';
+    overview?.mttr_seconds != null
+      ? overview.mttr_seconds.toFixed(1)
+      : resolvedDurations.length > 0
+        ? (resolvedDurations.reduce((a, b) => a + b, 0) / resolvedDurations.length).toFixed(1)
+        : '0.0';
 
   // Recent 5 incidents
   const recentIncidents = incidents.slice(0, 5);
@@ -99,6 +116,86 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
           </button>
         </div>
       )}
+
+      {/* Prominent SRE Demo & Quick Simulate Workflow */}
+      <div className="bg-slate-900/90 border border-indigo-500/40 rounded-xl p-4 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center space-x-2">
+              <span className="text-xl">⚡</span>
+              <h3 className="text-sm font-bold text-slate-100 font-mono tracking-wide uppercase">
+                Chaos Engineering Quick-Trigger Workflow
+              </h3>
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                DEMO PIPELINE
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 font-mono">
+              Inject a fault to watch the real-time SRE transition: <strong className="text-emerald-400">HEALTHY</strong> → <strong className="text-amber-400">FAILURE</strong> → <strong className="text-rose-400">DETECTED</strong> → <strong className="text-cyan-400">RECOVERING</strong> → <strong className="text-emerald-400">RECOVERED</strong>.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {resources.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 mr-1">
+                <span className="text-[11px] font-mono text-slate-500 hidden sm:inline">Presets:</span>
+                {resources.slice(0, 3).map((r) => (
+                  <button
+                    key={r.resource_id}
+                    onClick={() => {
+                      if (onSimulateForResource) onSimulateForResource(r.resource_id);
+                      else onNavigateTab('simulator');
+                    }}
+                    title={`Simulate fault injection on ${r.resource_id}`}
+                    className="px-2 py-1 rounded bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-mono transition-colors"
+                  >
+                    ⚡ {r.resource_id}
+                  </button>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => onNavigateTab('simulator')}
+              className="px-3 py-1.5 bg-gradient-to-r from-rose-600 via-amber-600 to-rose-600 hover:from-rose-500 hover:via-amber-500 hover:to-rose-500 text-white font-bold text-xs font-mono rounded-lg shadow-md shadow-rose-950/50 border border-rose-400/50 flex items-center space-x-1.5 transition-all transform hover:scale-105 active:scale-95 cursor-pointer"
+            >
+              <span>⚡</span>
+              <span>Launch Simulator</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 5-Stage Visual Transition Stepper Ribbon */}
+        <div className="mt-3 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+          <div className="flex items-center space-x-2 flex-1 overflow-x-auto py-1">
+            <span className="px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-400 border border-emerald-800/40 font-semibold">1. HEALTHY</span>
+            <span className="text-slate-600">↓</span>
+            <span className="px-2 py-0.5 rounded bg-amber-950/40 text-amber-400 border border-amber-800/40 font-semibold">2. FAILURE</span>
+            <span className="text-slate-600">↓</span>
+            <span className="px-2 py-0.5 rounded bg-rose-950/40 text-rose-400 border border-rose-800/40 font-semibold">3. DETECTED</span>
+            <span className="text-slate-600">↓</span>
+            <span className="px-2 py-0.5 rounded bg-cyan-950/40 text-cyan-400 border border-cyan-800/40 font-semibold">4. RECOVERING</span>
+            <span className="text-slate-600">↓</span>
+            <span className="px-2 py-0.5 rounded bg-emerald-950/40 text-emerald-400 border border-emerald-800/40 font-semibold">5. RECOVERED</span>
+          </div>
+          <button
+            onClick={() => onNavigateTab('simulator')}
+            className="text-[11px] text-indigo-400 hover:text-indigo-300 underline font-mono ml-auto"
+          >
+            Configure Failure Scenarios →
+          </button>
+        </div>
+      </div>
+
+      {/* Fleet Health Distribution Visual Bar */}
+      <div className="bg-slate-900/80 border border-slate-800/80 rounded-xl p-4 shadow-lg">
+        <SegmentedHealthBar
+          total={resources.length}
+          healthy={healthyCount}
+          warning={warningCount}
+          failed={failedCount}
+          recovering={recoveringCount}
+        />
+      </div>
 
       {/* KPI Metric Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

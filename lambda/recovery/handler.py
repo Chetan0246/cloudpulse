@@ -47,7 +47,12 @@ sys.path.insert(0, "/opt/python")
 sys.path.insert(0, os.path.dirname(__file__))  # Allow `from strategies import ...`
 
 from app.config import get_settings
-from app.logging_config import configure_logging
+from app.logging_config import (
+    configure_logging,
+    set_correlation_id,
+    set_incident_id,
+    set_trace_stage,
+)
 from app.models.incident import (
     Incident,
     IncidentSeverity,
@@ -148,14 +153,40 @@ def handler(event: dict, context: Any) -> dict:
     """Recovery Lambda handler — CloudPulse self-healing entry point."""
     settings = get_settings()
     configure_logging(settings.log_level)
-    logger.info("Recovery Lambda invoked", extra={"event": event})
+
+    detail = event.get("detail", {})
+    correlation_id = detail.get("correlationId") or detail.get("incidentId")
+    if correlation_id:
+        set_correlation_id(correlation_id)
+    set_trace_stage("recovery")
+
+    logger.info(
+        "Recovery Lambda invoked",
+        extra={
+            "stage": "recovery",
+            "correlation_id": correlation_id,
+            "event": event,
+        },
+    )
 
     # ── 1. Parse event ─────────────────────────────────────────────────────────
     try:
         resource_id, failure_type = _parse_event(event)
     except (ValueError, KeyError) as e:
-        logger.error("Failed to parse event", extra={"error": str(e), "event": event})
-        return {"statusCode": 400, "body": f"Invalid event: {e}"}
+        logger.error(
+            "Failed to parse event — re-raising so Lambda retry policy and DLQ engage",
+            extra={
+                "stage": "recovery",
+                "correlation_id": correlation_id,
+                "error": str(e),
+                "event": event,
+            },
+        )
+        # A-06 FIX: Raise instead of returning HTTP 400.
+        # A non-exception return is treated as a Lambda success — the DLQ is never
+        # triggered and the event is silently lost.  Re-raising causes Lambda to
+        # retry (per EventBridge retry config) and ultimately route to the DLQ.
+        raise
 
     resource_repo = ResourceRepository()
     incident_repo = IncidentRepository()
@@ -214,13 +245,25 @@ def handler(event: dict, context: Any) -> dict:
         # Reuse the most recent open/recovering incident (e.g., from direct injection)
         incident = max(active_incidents, key=lambda i: i.detected_at)
         incident_is_new = False
+        correlation_id = correlation_id or incident.incident_id
+        set_correlation_id(correlation_id)
+        set_incident_id(incident.incident_id)
         logger.info(
             "Reusing existing incident",
-            extra={"incident_id": incident.incident_id, "resource_id": resource_id},
+            extra={
+                "stage": "recovery",
+                "correlation_id": correlation_id,
+                "incident_id": incident.incident_id,
+                "resource_id": resource_id,
+            },
         )
     else:
+        incident_id = str(uuid.uuid4())
+        correlation_id = correlation_id or incident_id
+        set_correlation_id(correlation_id)
+        set_incident_id(incident_id)
         incident = Incident(
-            incident_id=str(uuid.uuid4()),
+            incident_id=incident_id,
             resource_id=resource_id,
             failure_type=failure_type,
             severity=IncidentSeverity(failure_type.default_severity()),
@@ -237,7 +280,12 @@ def handler(event: dict, context: Any) -> dict:
         incident_is_new = True
         logger.info(
             "Created new incident",
-            extra={"incident_id": incident.incident_id, "resource_id": resource_id},
+            extra={
+                "stage": "recovery",
+                "correlation_id": correlation_id,
+                "incident_id": incident.incident_id,
+                "resource_id": resource_id,
+            },
         )
         # Notify failure detected for newly observed failure if not notified
         incident, _ = notification_svc.notify_failure_detected(incident)
@@ -248,11 +296,12 @@ def handler(event: dict, context: Any) -> dict:
     # ── 6. Execute recovery strategy ───────────────────────────────────────────
     recovery_start_time = datetime.now(timezone.utc)
 
-    # Notify recovery started
+    # A-07 FIX: Resolve strategy once and reuse for both notification preview and execution.
     try:
-        preview_strategy = dispatch_strategy(failure_type)
-        preview_action_name = preview_strategy.recovery_action_type.value
+        strategy = dispatch_strategy(failure_type)
+        preview_action_name = strategy.recovery_action_type.value
     except Exception:
+        strategy = None  # type: ignore[assignment]
         preview_action_name = "AUTOMATED_STRATEGY"
 
     incident, _ = notification_svc.notify_recovery_started(
@@ -263,7 +312,8 @@ def handler(event: dict, context: Any) -> dict:
     )
 
     try:
-        strategy = dispatch_strategy(failure_type)
+        if strategy is None:
+            strategy = dispatch_strategy(failure_type)
         logger.info(
             "Executing recovery strategy",
             extra={
@@ -336,8 +386,10 @@ def handler(event: dict, context: Any) -> dict:
             incident_repo.update(resolved_incident)
 
         logger.info(
-            "Recovery complete",
+            "Recovery complete: resource restored to RECOVERED",
             extra={
+                "stage": "recovery",
+                "correlation_id": correlation_id,
                 "resource_id": resource_id,
                 "failure_type": failure_type.value,
                 "incident_id": resolved_incident.incident_id,
@@ -363,11 +415,14 @@ def handler(event: dict, context: Any) -> dict:
             extra={"resource_id": resource_id, "failure_type": failure_type.value},
         )
 
-        # Determine the action type even if dispatch_strategy itself fails
-        try:
-            strategy_type = dispatch_strategy(failure_type).recovery_action_type
-        except Exception:
-            strategy_type = RecoveryActionType.MANUAL
+        # Determine the action type — reuse the strategy resolved earlier (A-07 FIX)
+        if strategy is not None:
+            strategy_type = strategy.recovery_action_type
+        else:
+            try:
+                strategy_type = dispatch_strategy(failure_type).recovery_action_type
+            except Exception:
+                strategy_type = RecoveryActionType.MANUAL
 
         failed_action = RecoveryAction(
             action_id=str(uuid.uuid4()),

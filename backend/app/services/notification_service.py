@@ -101,6 +101,7 @@ class NotificationService:
                 f"CLOUDPULSE ALERT: Failure Detected\n"
                 f"{divider}\n"
                 f"Incident ID:    {incident_id}\n"
+                f"Correlation ID: {incident_id}\n"
                 f"Resource:       {resource_id}\n"
                 f"Failure Type:   {failure_type}\n"
                 f"Severity:       {incident.severity.value}\n"
@@ -123,6 +124,7 @@ class NotificationService:
                 f"CLOUDPULSE ALERT: Recovery Started\n"
                 f"{divider}\n"
                 f"Incident ID:     {incident_id}\n"
+                f"Correlation ID:  {incident_id}\n"
                 f"Resource:        {resource_id}\n"
                 f"Failure Type:    {failure_type}\n"
                 f"Status:          {status_val}\n"
@@ -148,6 +150,7 @@ class NotificationService:
                 f"CLOUDPULSE ALERT: Recovery Successful\n"
                 f"{divider}\n"
                 f"Incident ID:       {incident_id}\n"
+                f"Correlation ID:    {incident_id}\n"
                 f"Resource:          {resource_id}\n"
                 f"Failure Type:      {failure_type}\n"
                 f"Status:            {status_val}\n"
@@ -171,6 +174,7 @@ class NotificationService:
                 f"CLOUDPULSE ALERT: Recovery Failed\n"
                 f"{divider}\n"
                 f"Incident ID:    {incident_id}\n"
+                f"Correlation ID: {incident_id}\n"
                 f"Resource:       {resource_id}\n"
                 f"Failure Type:   {failure_type}\n"
                 f"Status:         {status_val}\n"
@@ -251,6 +255,18 @@ class NotificationService:
         )
 
         success = self.send_notification(subject, message)
+
+        logger.info(
+            "SNS lifecycle notification processed",
+            extra={
+                "stage": "notification",
+                "correlation_id": incident.incident_id,
+                "incident_id": incident.incident_id,
+                "resource_id": incident.resource_id,
+                "transition": trans_val,
+                "status": "SENT" if success else ("NOT_CONFIGURED" if not self.topic_arn else "FAILED"),
+            },
+        )
 
         new_transitions = [*incident.notified_transitions, trans_val]
         updated_incident = incident.model_copy(

@@ -47,7 +47,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "OPTIONS"],  # A-03: PUT/DELETE removed — no routers define them
         allow_headers=["Content-Type", "Authorization"],
     )
 

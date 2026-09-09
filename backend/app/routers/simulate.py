@@ -44,6 +44,7 @@ class SimulateFailureRequest(BaseModel):
     resource_id: str = Field(
         ...,
         alias="resourceId",
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9\-]{0,63}$",
         description="Unique identifier of the resource, e.g. 'VM-001'",
         examples=["VM-001", "API-001", "DB-001", "STORAGE-001"],
     )
@@ -95,6 +96,7 @@ class SimulateResetRequest(BaseModel):
     resource_id: str = Field(
         ...,
         alias="resourceId",
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9\-]{0,63}$",
         description="Identifier of the resource to reset",
         examples=["VM-001"],
     )
@@ -177,7 +179,11 @@ def inject_failure_alias(
     summary="Manually reset/recover a simulated resource by path ID",
 )
 def reset_resource_by_path(
-    resource_id: str = Path(..., description="Unique resource identifier, e.g. 'VM-001'"),
+    resource_id: str = Path(
+        ...,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9\-]{0,63}$",
+        description="Unique resource identifier, e.g. 'VM-001'",
+    ),
     service: SimulationService = Depends(get_simulation_service),
 ) -> SimulateResetResponse:
     """

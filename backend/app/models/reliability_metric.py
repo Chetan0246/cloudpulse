@@ -345,7 +345,7 @@ class ReliabilityMetricSummary(BaseModel):
     """
     Lightweight projection of a ReliabilityMetric for dashboard responses.
 
-    Returns only the key KPIs needed for the reliability stats panel.
+    Returns key KPIs needed for the reliability stats panel.
     """
 
     resource_id: str
@@ -360,6 +360,54 @@ class ReliabilityMetricSummary(BaseModel):
     mtbf_seconds: float | None
     availability_pct: float | None
     computed_at: datetime
+    recovery_success_rate_pct: float = 100.0
+    recovery_failure_rate_pct: float = 0.0
+    avg_recovery_time_seconds: float | None = None
+    avg_detection_time_seconds: float | None = None
+    incident_frequency_per_hour: float = 0.0
+    incident_frequency_per_day: float = 0.0
+
+
+class HealthDistribution(BaseModel):
+    """Current fleet distribution across lifecycle states and health statuses."""
+
+    total_resources: int
+    healthy_count: int
+    warning_count: int
+    failed_count: int
+    recovering_count: int
+    healthy_pct: float
+    by_state: dict[str, int]
+    by_status: dict[str, int]
+
+
+class FleetReliabilityOverview(BaseModel):
+    """
+    Comprehensive reliability and observability metrics report.
+
+    Contains all 8 required SRE indicators:
+    1. Incident count
+    2. Recovery success rate
+    3. Recovery failure rate
+    4. Average recovery time
+    5. Mean Time to Recovery (MTTR)
+    6. Average detection time
+    7. Incident frequency (per hour, per day, MTBF)
+    8. Current resource health distribution
+    """
+
+    incident_count: int
+    recovery_success_rate_pct: float
+    recovery_failure_rate_pct: float
+    avg_recovery_time_seconds: float | None
+    mttr_seconds: float | None
+    avg_detection_time_seconds: float | None
+    incident_frequency_per_hour: float
+    incident_frequency_per_day: float
+    mtbf_seconds: float | None
+    health_distribution: HealthDistribution
+    computed_at: datetime
+    resources_metrics: list[ReliabilityMetricSummary] = []
 
 
 # ── Internal Helpers ──────────────────────────────────────────────────────────
