@@ -66,7 +66,11 @@ describe('FailureSimulatorSection', () => {
   it('progresses through complete 5-stage lifecycle: Healthy → Failure → Detection → Recovery → Recovered', async () => {
     vi.mocked(simulateApi.recover).mockResolvedValue({
       message: 'Resource VM-001 successfully recovered',
+      scenario_id: 'FS-01',
+      scenario_name: 'FS-01 High CPU Utilization',
       resource: { ...mockResources[0], current_state: 'HEALTHY' } as any,
+      incident: { incident_id: 'recovered-inc-123' } as any,
+      metrics_emitted: { CPUUtilization: 25.0 },
     });
 
     const handleInject = vi.fn().mockResolvedValue({

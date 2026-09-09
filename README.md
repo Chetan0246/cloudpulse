@@ -94,15 +94,18 @@ make setup-frontend
 # 4. Run backend unit tests (no AWS needed)
 make test-backend
 
-# 5. Start API locally (requires Docker for SAM local)
-make build
-cd infrastructure/sam
-sam local start-api --env-vars ../../local-env.json
+# 5a. Start API locally with uvicorn (recommended for fast iteration)
+cd backend
+uvicorn app.main:app --reload --port 8000
+
+# 5b. Or run via SAM local (requires Docker, uses port 3000)
+# make build && sam local start-api --env-vars local-env.json
 
 # 6. Start frontend
 cd frontend
 cp .env.example .env.local
-# Set VITE_API_BASE_URL=http://localhost:3000
+# VITE_API_BASE_URL defaults to http://localhost:8000 (uvicorn)
+# Change to http://localhost:3000 if using SAM local
 npm run dev
 ```
 

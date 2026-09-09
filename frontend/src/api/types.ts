@@ -107,9 +107,27 @@ export interface InjectRequest {
   failure_type: FailureType;
 }
 
+/**
+ * Response from POST /simulate/failure
+ * Mirrors backend SimulateFailureResponse (backend/app/routers/simulate.py)
+ */
 export interface SimulateResponse {
   message: string;
+  scenario_id: string;
+  scenario_name: string;
   resource: Resource;
+  incident: Incident;
+  metrics_emitted: Record<string, number>;
+}
+
+/**
+ * Response from POST /simulate/reset/{id}
+ * Mirrors backend SimulateResetResponse
+ */
+export interface SimulateResetResponse {
+  message: string;
+  resource: Resource;
+  resolved_incidents: string[];
 }
 
 export interface ReliabilityMetric {
