@@ -14,6 +14,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import boto3
@@ -27,7 +28,7 @@ def seed(table_name: str, region: str) -> None:
     table = dynamodb.Table(table_name)
 
     with open(FIXTURES_PATH) as f:
-        resources = json.load(f)
+        resources = json.load(f, parse_float=Decimal)
 
     now = datetime.now(timezone.utc).isoformat()
     for r in resources:

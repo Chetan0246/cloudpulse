@@ -21,6 +21,7 @@ def reset(table_name: str, region: str) -> None:
     response = table.scan()
     items = response.get("Items", [])
 
+    from decimal import Decimal
     for item in items:
         table.update_item(
             Key={"resource_id": item["resource_id"]},
@@ -28,16 +29,16 @@ def reset(table_name: str, region: str) -> None:
                 "SET current_state = :s, health_status = :h, "
                 "cpu_utilization = :cpu, memory_utilization = :mem, "
                 "storage_utilization = :stor, network_latency_ms = :net, "
-                "active_failure_type = :aft, updated_at = :u"
+                "updated_at = :u "
+                "REMOVE active_failure_type"
             ),
             ExpressionAttributeValues={
                 ":s": "HEALTHY",
                 ":h": "HEALTHY",
-                ":cpu": "25.0",
-                ":mem": "30.0",
-                ":stor": "20.0",
-                ":net": "15.0",
-                ":aft": None,
+                ":cpu": Decimal("25.0"),
+                ":mem": Decimal("30.0"),
+                ":stor": Decimal("20.0"),
+                ":net": Decimal("15.0"),
                 ":u": now,
             },
         )

@@ -10,12 +10,18 @@ ENV="${1:-dev}"
 STACK_NAME="cloudpulse-${ENV}"
 REGION="${AWS_REGION:-ap-south-1}"
 
-echo "==> Getting S3 bucket name from CloudFormation stack: ${STACK_NAME}"
+echo "==> Getting S3 bucket name and API endpoint from CloudFormation stack: ${STACK_NAME}"
 BUCKET=$(aws cloudformation describe-stacks \
   --stack-name "${STACK_NAME}" \
   --region "${REGION}" \
+  --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketName'].OutputValue" \
+  --output text)
+
+WEBSITE_URL=$(aws cloudformation describe-stacks \
+  --stack-name "${STACK_NAME}" \
+  --region "${REGION}" \
   --query "Stacks[0].Outputs[?OutputKey=='FrontendBucketWebsiteURL'].OutputValue" \
-  --output text | sed 's|http://||' | cut -d. -f1)
+  --output text)
 
 API_URL=$(aws cloudformation describe-stacks \
   --stack-name "${STACK_NAME}" \
@@ -31,4 +37,5 @@ echo "==> Uploading to S3 bucket: ${BUCKET}"
 aws s3 sync dist/ "s3://${BUCKET}" --delete --region "${REGION}"
 
 echo "==> Done. Frontend deployed."
-echo "    URL: http://${BUCKET}.s3-website.${REGION}.amazonaws.com"
+echo "    Website URL: ${WEBSITE_URL}"
+echo "    API Endpoint: ${API_URL}"

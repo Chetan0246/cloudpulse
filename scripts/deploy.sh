@@ -32,6 +32,8 @@ NC='\033[0m'
 ENV="dev"
 REGION="${AWS_REGION:-ap-south-1}"
 NOTIFICATION_EMAIL="${NOTIFICATION_EMAIL:-}"
+PUBLIC_FRONTEND=false
+CORS_ORIGIN=""
 GUIDED=false
 DRY_RUN=false
 
@@ -55,6 +57,14 @@ while [[ $# -gt 0 ]]; do
       NOTIFICATION_EMAIL="$2"
       shift 2
       ;;
+    -p|--public-frontend)
+      PUBLIC_FRONTEND=true
+      shift
+      ;;
+    -c|--cors-origin)
+      CORS_ORIGIN="$2"
+      shift 2
+      ;;
     -g|--guided)
       GUIDED=true
       shift
@@ -69,12 +79,14 @@ Usage:
   ./scripts/deploy.sh [options]
 
 Options:
-  -e, --env <env>        Deployment environment (dev, test, prod). Default: dev
-  -r, --region <region>  AWS region. Default: ap-south-1 (or $AWS_REGION)
-  -m, --email <email>    Notification email for SNS topic alerts. Default: ""
-  -g, --guided           Run SAM deploy in interactive guided mode
-  -d, --dry-run          Validate and build SAM artifacts without deploying
-  -h, --help             Show this help message
+  -e, --env <env>            Deployment environment (dev, test, prod). Default: dev
+  -r, --region <region>      AWS region. Default: ap-south-1 (or $AWS_REGION)
+  -m, --email <email>        Notification email for SNS topic alerts. Default: ""
+  -p, --public-frontend      Enable public S3 static website hosting for frontend
+  -c, --cors-origin <origin> Allowed CORS origin (e.g. '*' or S3 URL). Default: http://localhost:5173
+  -g, --guided               Run SAM deploy in interactive guided mode
+  -d, --dry-run              Validate and build SAM artifacts without deploying
+  -h, --help                 Show this help message
 HELPMSG
       exit 0
       ;;
@@ -184,6 +196,12 @@ else
   PARAM_OVERRIDES="Environment=${ENV}"
   if [[ -n "${NOTIFICATION_EMAIL}" ]]; then
     PARAM_OVERRIDES="${PARAM_OVERRIDES} NotificationEmail=${NOTIFICATION_EMAIL}"
+  fi
+  if [[ "${PUBLIC_FRONTEND}" = true ]]; then
+    PARAM_OVERRIDES="${PARAM_OVERRIDES} EnablePublicFrontendBucket=true"
+  fi
+  if [[ -n "${CORS_ORIGIN}" ]]; then
+    PARAM_OVERRIDES="${PARAM_OVERRIDES} CorsAllowedOrigins=${CORS_ORIGIN}"
   fi
 
   echo "Executing non-interactive deployment with parameter overrides: ${PARAM_OVERRIDES}"
