@@ -61,6 +61,11 @@ def create_app() -> FastAPI:
     app.include_router(metrics.router)
     app.include_router(simulate.router)
 
+    @app.get("", include_in_schema=False)
+    @app.get("/", summary="Root status", tags=["health"])
+    def root() -> dict[str, str]:
+        return {"service": "cloudpulse-api", "status": "ok"}
+
     return app
 
 

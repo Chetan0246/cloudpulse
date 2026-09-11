@@ -27,10 +27,28 @@ import os
 # In production this is handled by the SAM build process.
 sys.path.insert(0, "/opt/python")  # Lambda layer path
 
+from typing import Any
+
 from mangum import Mangum  # type: ignore[import-untyped]
 
 from app.main import app  # FastAPI application from backend/
 
-# Mangum wraps FastAPI's ASGI interface for Lambda
-# lifespan="off" because we handle startup via FastAPI's lifespan context
-handler = Mangum(app, lifespan="off")
+_handlers: dict[str, Mangum] = {}
+
+
+def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
+    """
+    API Gateway Lambda proxy handler.
+
+    Dynamically resolves the API Gateway stage from requestContext and
+    configures Mangum with api_gateway_base_path so that stage prefixes
+    (e.g., /dev) do not cause 404 Not Found errors on FastAPI routes.
+    """
+    stage = event.get("requestContext", {}).get("stage")
+    base_path = f"/{stage}" if stage and stage != "$default" else "/"
+
+    if base_path not in _handlers:
+        _handlers[base_path] = Mangum(app, lifespan="off", api_gateway_base_path=base_path)
+
+    return _handlers[base_path](event, context)
+

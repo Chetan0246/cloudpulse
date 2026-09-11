@@ -724,8 +724,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
-                  # A-18 FIX: Removed dynamodb:Scan — Query on ResourceIndex GSI is sufficient
-                  # for resource-filtered incident lookups. Full Scan is not needed.
+                  - dynamodb:Scan
                   - dynamodb:Query
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
