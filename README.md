@@ -1,11 +1,17 @@
 # ☁️ CloudPulse
 
+[![CI](https://github.com/Chetan0246/cloudpulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Chetan0246/cloudpulse/actions/workflows/ci.yml)
+
 **Autonomous Cloud Reliability and Self-Healing Simulator Using AWS Serverless Architecture**
 
 > **Course:** BCSE355L – Cloud Architecture Design | Fall 2026-2027  
 > **Milestone:** Project Review 2 (Release Candidate)  
 > **Verification:** 367 Backend Tests (100% Pass) | 49 Frontend Tests (100% Pass) | 0 Lint/Build Errors  
 > **Repository:** [github.com/Chetan0246/cloudpulse](https://github.com/Chetan0246/cloudpulse)
+
+## How to run
+
+See the [local quickstart](#6-local-quickstart-guide) for backend and dashboard setup.
 
 ---
 
