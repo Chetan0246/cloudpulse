@@ -20,6 +20,7 @@ def configured(monkeypatch):
         "REAL_ASG_NAME": "cloudpulse-demo",
         "REAL_ALB_LISTENER_RULE_ARN": "arn:rule/demo",
         "REAL_ALTERNATE_TARGET_GROUP_ARN": "arn:tg/alternate",
+        "REAL_ALTERNATE_INSTANCE_ID": "i-alternate",
         "REAL_FAILOVER_TARGET_GROUP_ARN": "arn:tg/failover",
         "REAL_PRIMARY_INSTANCE_ID": "i-primary",
         "REAL_STANDBY_INSTANCE_ID": "i-standby",
@@ -102,8 +103,9 @@ def test_network_reroute_requires_healthy_target_and_changes_only_configured_rul
             self.changed = None
 
         def describe_target_health(self, **kwargs):
+            assert kwargs["Targets"] == [{"Id": "i-alternate"}]
             return {"TargetHealthDescriptions": [{
-                "Target": {"Id": "i-primary"},
+                "Target": {"Id": "i-alternate"},
                 "TargetHealth": {"State": "healthy"},
             }]}
 
