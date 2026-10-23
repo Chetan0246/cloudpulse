@@ -34,8 +34,7 @@ $$\text{Healthy} \longrightarrow \text{Failure Injection} \longrightarrow \text{
 | **Operator Dashboard** | Responsive SRE control console with live 5-stage lifecycle visualizer | React 18, TypeScript, Tailwind |
 
 > [!IMPORTANT]
-> **Cardinal Simulation Safety Boundary (Project Constitution §2.2):**  
-> CloudPulse is an **academic simulation system**. Failures are simulated logically through state mutations in DynamoDB and custom CloudWatch metrics. CloudPulse **NEVER modifies, stops, terminates, or disrupts real AWS compute (EC2), database (RDS), or networking (VPC) hardware**. The entire monitoring, alerting, routing, compute, and persistence infrastructure is 100% genuine AWS serverless.
+> **Default safety boundary:** CloudPulse remains simulator-only by default. Failures update virtual DynamoDB resources and synthetic CloudWatch metrics. The real remediation adapter is opt-in only through the SAM parameter RealRemediationEnabled, which defaults to false. When explicitly enabled, fixed actions can operate only on the deployment-configured demo EC2/ASG/ALB allowlist; event and API payloads cannot supply AWS targets or commands. The current HTTP API has no authorizer, so do not enable real mode while it is publicly reachable until authenticated or private operator access is added. CloudWatch alarms still use synthetic CloudPulse metrics unless real EC2 telemetry is separately configured. See [docs/REAL_AWS_REMEDIATION.md](./docs/REAL_AWS_REMEDIATION.md) for the action mappings, prerequisites, permissions, deployment procedure, test commands, and rollback.
 
 ---
 
@@ -133,6 +132,7 @@ For live evaluation and Review 2 defense, follow the 11-stage closed-loop demo:
 - [FAILURE_SIMULATION.md](./docs/FAILURE_SIMULATION.md) — The 5 failure scenarios (FS-01 to FS-05) and injection models
 - [MONITORING_ARCHITECTURE.md](./docs/MONITORING_ARCHITECTURE.md) — CloudWatch metrics, composite `ServiceHealth`, and alarms
 - [SELF_HEALING_ARCHITECTURE.md](./docs/SELF_HEALING_ARCHITECTURE.md) — Recovery strategies, idempotency guards, and retry mechanics
+- [REAL_AWS_REMEDIATION.md](./docs/REAL_AWS_REMEDIATION.md) — Default-off AWS actions, allowlisted targets, deployment, tests, and rollback
 - [TEST_STRATEGY.md](./docs/TEST_STRATEGY.md) — 9-layer testing methodology, Moto mocking, and failure triage
 - [SECURITY.md](./docs/SECURITY.md) — STRIDE threat model, least-privilege IAM policies, and audit findings
 - [RELIABILITY_METRICS.md](./docs/RELIABILITY_METRICS.md) — Mathematical formulations of all 8 SRE indicators
