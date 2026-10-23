@@ -34,7 +34,7 @@ $$\text{Healthy} \longrightarrow \text{Failure Injection} \longrightarrow \text{
 | **Operator Dashboard** | Responsive SRE control console with live 5-stage lifecycle visualizer | React 18, TypeScript, Tailwind |
 
 > [!IMPORTANT]
-> **Default safety boundary:** CloudPulse remains simulator-only by default. Failures update virtual DynamoDB resources and synthetic CloudWatch metrics. The real remediation adapter is opt-in only through the SAM parameter RealRemediationEnabled, which defaults to false. When explicitly enabled, fixed actions can operate only on the deployment-configured demo EC2/ASG/ALB allowlist; event and API payloads cannot supply AWS targets or commands. The five action mappings, prerequisites, permissions, deployment procedure, test commands, and rollback steps are documented in [docs/REAL_AWS_REMEDIATION.md](./docs/REAL_AWS_REMEDIATION.md).
+> **Default safety boundary:** CloudPulse remains simulator-only by default. Failures update virtual DynamoDB resources and synthetic CloudWatch metrics. The real remediation adapter is opt-in only through the SAM parameter RealRemediationEnabled, which defaults to false. When explicitly enabled, fixed actions can operate only on the deployment-configured demo EC2/ASG/ALB allowlist; event and API payloads cannot supply AWS targets or commands. The current HTTP API has no authorizer, so do not enable real mode while it is publicly reachable until authenticated or private operator access is added. CloudWatch alarms still use synthetic CloudPulse metrics unless real EC2 telemetry is separately configured. See [docs/REAL_AWS_REMEDIATION.md](./docs/REAL_AWS_REMEDIATION.md) for the action mappings, prerequisites, permissions, deployment procedure, test commands, and rollback.
 
 ---
 
