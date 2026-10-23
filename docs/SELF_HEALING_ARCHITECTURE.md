@@ -24,16 +24,16 @@
 
 ## 1. Overview
 
-CloudPulse implements **autonomous self-healing** for simulated cloud resources. When a CloudWatch alarm fires (or a failure is directly injected via the API), the system:
+CloudPulse implements autonomous self-healing for virtual resources by default. When real mode is explicitly enabled, only the single deployment-allowlisted resource can invoke the fixed AWS action adapter described in REAL_AWS_REMEDIATION.md. When a CloudWatch alarm fires (or a failure is directly injected via the API), the system:
 
 1. Detects the failure type from the EventBridge event
 2. Transitions the resource through a lifecycle state machine
-3. Executes the appropriate simulated recovery strategy
+3. Executes the simulator strategy, or the allowlisted real AWS action when the opt-in gate and resource ID both match
 4. Updates the incident record with a full audit trail
 5. Resets resource metrics to nominal values
 6. Sends SNS notifications on success or failure
 
-> **Safety guarantee:** All recovery actions are **simulated**. The system mutates virtual resource state in DynamoDB and publishes synthetic metric resets to CloudWatch. It does **not** call `ec2:RebootInstances`, `rds:RebootDBInstance`, `lambda:DeleteFunction`, or any other real AWS infrastructure API.
+> **Default safety boundary:** Real AWS actions are disabled by default. With RealRemediationEnabled=true, only the one configured resource ID may invoke fixed allowlisted actions. Other IDs and all simulator-only deployments continue through the simulator path. See REAL_AWS_REMEDIATION.md for the IAM scope, required dedicated resources, action mapping, and rollback.
 
 ---
 
@@ -344,7 +344,7 @@ SNS failures are **non-fatal** — a `ClientError` during `sns.publish()` is cau
 
 ## 9. Safety Guarantee
 
-CloudPulse recovery operates **exclusively** on virtual state. The following table documents every write operation and confirms none touch real infrastructure:
+The default recovery path operates on virtual state. With the opt-in feature enabled, the real adapter also performs the five bounded actions described in REAL_AWS_REMEDIATION.md:
 
 | Operation | Target | Safe? |
 |-----------|--------|-------|
@@ -355,7 +355,7 @@ CloudPulse recovery operates **exclusively** on virtual state. The following tab
 | `MonitoringService.publish_resource_metrics()` | CloudWatch namespace `CloudPulse` | ✅ Custom metrics, not production metrics |
 | `sns.publish()` | SNS topic `cloudpulse-notifications-{env}` | ✅ Demo notifications |
 
-**No calls to:** `ec2:*`, `rds:*`, `ecs:*`, `lambda:DeleteFunction`, `autoscaling:*`, or any other compute/database API.
+**The adapter never accepts an AWS resource identifier or shell command from an event or API request.** Its conditional IAM policy scopes mutating actions to configured ASG, instance, listener rule, and target group resources. It does not grant broad EC2, RDS, ECS, or Lambda mutation permissions.
 
 ---
 
