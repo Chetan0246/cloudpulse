@@ -27,7 +27,7 @@ The adapter only uses deployment parameters for AWS resource IDs and ARNs. It do
 | NETWORK_LATENCY | Change one configured ALB listener rule to forward to the configured alternate target group | Requires the configured EC2 target to report healthy in that target group |
 | SERVICE_DOWNTIME | Deregister the configured primary from the configured failover target group | Requires a distinct configured standby to be healthy in the same target group first |
 
-The reroute action calls `ModifyRule` only for the configured listener-rule ARN. It does not call `DescribeRules`; AWS does not support resource-level scoping for that read action, so it is intentionally omitted from the Lambda policy ([AWS ELBv2 authorization reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_elbv2.html)).
+The reroute action calls `ModifyRule` only for the configured listener-rule ARN. It does not call `DescribeRules`; AWS does not support resource-level scoping for that read action, so it is intentionally omitted from the Lambda policy.
 
 The CloudPulse virtual resource and incident records remain the control-plane/audit representation and retain simulated metric reset values for the dashboard. The recovery action outcome records the real AWS result when the event's resource ID exactly matches RealAllowedResourceId. Other virtual resource IDs continue down the simulator path even when the feature flag is on. Current CloudWatch alarms still consume the project's CloudPulse synthetic metrics; the real adapter executes AWS actions but does not add real EC2 telemetry collection. For autonomous remediation based on actual EC2 health, first configure CloudWatch Agent or another trusted telemetry source and align alarm namespace/dimensions with the allowlisted resource.
 
@@ -65,7 +65,7 @@ sam deploy --stack-name cloudpulse-dev \
     RealStandbyInstanceId=i-REPLACE_WITH_HEALTHY_STANDBY
 ~~~
 
-All ARN values must be exact values copied from AWS. The policy resource only exists when the flag is true. The Recovery Lambda timeout is 120 seconds to allow bounded SSM command completion.
+All ARN values must be exact values copied from AWS. The template uses inert sentinel ARNs as defaults so SAM can lint the IAM policy; CloudFormation Rules reject enabling real mode while any sentinel remains. The policy resource only exists when the flag is true. The Recovery Lambda timeout is 120 seconds to allow bounded SSM command completion.
 
 Verify the deployed configuration before triggering a demo:
 
