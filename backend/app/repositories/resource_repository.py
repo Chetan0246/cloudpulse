@@ -143,9 +143,7 @@ class ResourceRepository:
                 placeholder = f":cs{index}"
                 placeholders.append(placeholder)
                 update_kwargs["ExpressionAttributeValues"][placeholder] = state.value
-            update_kwargs["ConditionExpression"] = (
-                f"current_state IN ({', '.join(placeholders)})"
-            )
+            update_kwargs["ConditionExpression"] = f"current_state IN ({', '.join(placeholders)})"
 
         try:
             response = self.table.update_item(**update_kwargs)

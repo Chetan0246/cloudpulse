@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import importlib.util
 import pathlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -33,6 +33,7 @@ _HANDLER_PATH = pathlib.Path(__file__).parents[3] / "lambda" / "simulator" / "ha
 
 
 # ── Module loader helper ──────────────────────────────────────────────────────
+
 
 def _load_simulator_handler():
     """
@@ -138,7 +139,7 @@ def _make_resource(
         network_latency_ms=latency,
         current_state=state_enum,
         health_status=health,
-        last_heartbeat=datetime.now(timezone.utc),
+        last_heartbeat=datetime.now(UTC),
     )
 
 
@@ -407,18 +408,14 @@ class TestMetricAlignment:
             ms.return_value.cloudwatch_namespace = "CloudPulse"
             svc.publish_resource_metrics(resource)
 
-        ms_names = {
-            m["MetricName"]
-            for m in mock_cw_ms.put_metric_data.call_args[1]["MetricData"]
-        }
+        ms_names = {m["MetricName"] for m in mock_cw_ms.put_metric_data.call_args[1]["MetricData"]}
 
         # Get metric names from simulator _publish_metrics
         sim_module = _load_simulator_handler()
         mock_cw_sim = MagicMock()
         sim_module._publish_metrics(resource, mock_cw_sim, "CloudPulse")
         sim_names = {
-            m["MetricName"]
-            for m in mock_cw_sim.put_metric_data.call_args[1]["MetricData"]
+            m["MetricName"] for m in mock_cw_sim.put_metric_data.call_args[1]["MetricData"]
         }
 
         assert ms_names == sim_names, (
@@ -512,7 +509,6 @@ class TestHandlerRecoverySkip:
 
     def test_recovery_initiated_resource_is_skipped(self) -> None:
         """Resources in RECOVERY_INITIATED must not have metrics re-published."""
-        from app.models.resource import ResourceState
 
         resource = _make_resource(resource_id="VM-001", state="RECOVERY_INITIATED")
         mock_cw = MagicMock()
@@ -527,7 +523,6 @@ class TestHandlerRecoverySkip:
 
     def test_recovery_in_progress_resource_is_skipped(self) -> None:
         """Resources in RECOVERY_IN_PROGRESS must not have metrics published."""
-        from app.models.resource import ResourceState
 
         resource = _make_resource(resource_id="API-001", state="RECOVERY_IN_PROGRESS")
         mock_cw = MagicMock()

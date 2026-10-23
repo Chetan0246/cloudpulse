@@ -31,18 +31,15 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
 from botocore.exceptions import ClientError
 from fastapi.testclient import TestClient
 
 from app.models.incident import (
     Incident,
-    IncidentDetail,
     IncidentSeverity,
     IncidentStatus,
-    IncidentSummary,
     RecoveryAction,
     RecoveryActionStatus,
     RecoveryActionType,
@@ -53,7 +50,6 @@ from app.services.notification_service import (
     NotificationService,
     NotificationTransition,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

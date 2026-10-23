@@ -133,7 +133,8 @@ class IncidentRepository:
             self.table.put_item(
                 Item=updated.to_dynamodb_item(),
                 # A-10 FIX: Minimum guard — prevent blind writes to non-existent incidents.
-                # Does not protect against concurrent overwrite races (would need a version counter).
+                # Does not protect against concurrent overwrite races (would need a
+                # version counter).
                 ConditionExpression="attribute_exists(incident_id)",
             )
             return updated

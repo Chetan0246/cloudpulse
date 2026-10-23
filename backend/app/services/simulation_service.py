@@ -260,7 +260,6 @@ class SimulationService:
         )
         return updated_resource, incident, emitted_metrics
 
-
     def reset_resource(self, resource_id: str) -> tuple[SimulatedResource, list[str]]:
         """
         Manually reset/recover a simulated resource to HEALTHY with nominal metrics.
@@ -354,4 +353,3 @@ class SimulationService:
                 resource_id,
                 exc_info=True,
             )
-

@@ -364,13 +364,10 @@ Resources:
               detail-type:
                 - CloudWatch Alarm State Change
               detail:
-                # One map = AND semantics. Listing two separate list items
-                # would OR them (prefix OR anything-but-suffix), matching
-                # unrelated alarms.
+                # Match only CloudPulse alarms. Filter out composite SERVICE_HEALTH
+                # alarms inside the handler to keep the EventBridge pattern valid and avoid OR-matching.
                 alarmName:
                   - prefix: cloudpulse-
-                    anything-but:
-                      suffix: -SERVICE_HEALTH
                 state:
                   value:
                     - ALARM

@@ -16,12 +16,10 @@ All AWS calls are mocked via unittest.mock — no real AWS needed.
 from __future__ import annotations
 
 import importlib.util
-import json
 import pathlib
 import sys
-from datetime import datetime, timezone
-from typing import Any
-from unittest.mock import MagicMock, call, patch
+from datetime import UTC, datetime
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -173,7 +171,9 @@ class TestParseEventDirectSimulation:
     def module(self):
         self.h = _load_recovery_handler()
 
-    def _direct_event(self, resource_id: str, failure_type: str, incident_id: str = "test-id") -> dict:
+    def _direct_event(
+        self, resource_id: str, failure_type: str, incident_id: str = "test-id"
+    ) -> dict:
         return {
             "source": "cloudpulse.simulator",
             "detail-type": "FailureInjected",
@@ -184,14 +184,12 @@ class TestParseEventDirectSimulation:
                 "severity": "HIGH",
                 "scenarioCode": "FS-01",
                 "incidentId": incident_id,
-                "detectedAt": datetime.now(timezone.utc).isoformat(),
+                "detectedAt": datetime.now(UTC).isoformat(),
             },
         }
 
     def test_parse_high_cpu_direct(self) -> None:
-        resource_id, failure_type = self.h._parse_event(
-            self._direct_event("VM-001", "HIGH_CPU")
-        )
+        resource_id, failure_type = self.h._parse_event(self._direct_event("VM-001", "HIGH_CPU"))
         assert resource_id == "VM-001"
         from app.models.resource import FailureType
 
@@ -364,7 +362,6 @@ class TestIdempotencyGuard:
         }
 
         # Patch ResourceRepository at the module level using sys.modules approach
-        import sys
 
         original_rr = sys.modules.get("app.repositories.resource_repository")
         try:
@@ -386,6 +383,21 @@ class TestIdempotencyGuard:
         # update_state must NOT have been called (pre-read short-circuits)
         mock_repo.update_state.assert_not_called()
 
+    def test_service_health_alarm_ignored_cleanly(self) -> None:
+        """SERVICE_HEALTH composite alarms are cleanly ignored and acknowledged with 200."""
+        h = _load_recovery_handler()
+        event = {
+            "source": "aws.cloudwatch",
+            "detail-type": "CloudWatch Alarm State Change",
+            "detail": {
+                "alarmName": "cloudpulse-VM-001-SERVICE_HEALTH",
+                "state": {"value": "ALARM"},
+            },
+        }
+        result = h.handler(event, MagicMock())
+        assert result["statusCode"] == 200
+        assert "Ignored SERVICE_HEALTH alarm" in result["body"]
+
     def test_invalid_event_raises_for_dlq(self) -> None:
         """Unparseable event must now RAISE (not return 400) so the DLQ is triggered.
 
@@ -393,6 +405,7 @@ class TestIdempotencyGuard:
         bypassing the DLQ. Raising causes Lambda retry policy and DLQ to engage.
         """
         import pytest
+
         h = _load_recovery_handler()
 
         event = {

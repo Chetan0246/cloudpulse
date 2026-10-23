@@ -30,14 +30,13 @@ from app.models.resource import (
     SimulatedResource,
 )
 from app.services.monitoring_service import (
-    MonitoringService,
     _WEIGHT_CPU,
     _WEIGHT_LATENCY,
     _WEIGHT_MEMORY,
     _WEIGHT_STORAGE,
+    MonitoringService,
     compute_service_health,
 )
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -67,7 +66,7 @@ def _failure_resource(failure_type: FailureType) -> SimulatedResource:
         current_state=ResourceState.FAILURE_DETECTED,
         health_status=HealthStatus.CRITICAL,
         active_failure_type=failure_type,
-        **{k: v for k, v in targets.items()},
+        **dict(targets),
     )
 
 
@@ -280,9 +279,7 @@ class TestPublishResourceMetrics:
             svc.publish_resource_metrics(resource)
 
         call_kwargs = mock_cw.put_metric_data.call_args[1]
-        sh_points = [
-            d for d in call_kwargs["MetricData"] if d["MetricName"] == "ServiceHealth"
-        ]
+        sh_points = [d for d in call_kwargs["MetricData"] if d["MetricName"] == "ServiceHealth"]
         assert len(sh_points) == 1
         assert sh_points[0]["Unit"] == "None"
 

@@ -184,6 +184,16 @@ def handler(event: dict, context: Any) -> dict:
     )
 
     # ── 1. Parse event ─────────────────────────────────────────────────────────
+    # Composite SERVICE_HEALTH alarms notify on fleet degradation but do not
+    # trigger direct automated remediation strategies. Acknowledge and ignore cleanly.
+    alarm_name = str(detail.get("alarmName", ""))
+    if alarm_name.endswith("-SERVICE_HEALTH"):
+        logger.info(
+            "Ignoring composite SERVICE_HEALTH alarm (non-actionable for recovery)",
+            extra={"alarm_name": alarm_name},
+        )
+        return {"statusCode": 200, "body": "Ignored SERVICE_HEALTH alarm"}
+
     try:
         resource_id, failure_type = _parse_event(event)
     except (ValueError, KeyError) as e:

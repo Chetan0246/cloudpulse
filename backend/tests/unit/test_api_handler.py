@@ -16,13 +16,20 @@ import importlib.util
 import json
 import pathlib
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
+
 from app.models.incident import Incident, IncidentSeverity, IncidentStatus
-from app.models.resource import FailureType, HealthStatus, ResourceState, ResourceType, SimulatedResource
+from app.models.resource import (
+    FailureType,
+    HealthStatus,
+    ResourceState,
+    ResourceType,
+    SimulatedResource,
+)
 
 _HANDLER_PATH = pathlib.Path(__file__).parents[3] / "lambda" / "api" / "handler.py"
 
@@ -36,7 +43,9 @@ def _load_api_handler():
     return module
 
 
-def _make_event(path: str, stage: str = "dev", method: str = "GET", body: str | None = None) -> dict[str, Any]:
+def _make_event(
+    path: str, stage: str = "dev", method: str = "GET", body: str | None = None
+) -> dict[str, Any]:
     event = {
         "version": "2.0",
         "routeKey": f"{method} {path}",
@@ -140,12 +149,12 @@ def test_api_handler_simulate_failure_route_matched():
         failure_type=FailureType.HIGH_CPU,
         status=IncidentStatus.OPEN,
         severity=IncidentSeverity.HIGH,
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
         state_at_detection=ResourceState.FAILURE_DETECTED,
     )
 
-    with patch("app.routers.simulate.SimulationService") as MockService:
-        mock_instance = MockService.return_value
+    with patch("app.routers.simulate.SimulationService") as mock_service_cls:
+        mock_instance = mock_service_cls.return_value
         mock_instance.inject_failure.return_value = (
             sample_res,
             sample_inc,

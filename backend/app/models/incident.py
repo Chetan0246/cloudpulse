@@ -355,7 +355,10 @@ class Incident(BaseModel):
     )
     notified_transitions: list[str] = Field(
         default_factory=list,
-        description="List of incident transitions for which SNS notifications were dispatched (prevents duplicates)",
+        description=(
+            "List of incident transitions for which SNS notifications were "
+            "dispatched (prevents duplicates)"
+        ),
     )
     retry_count: int = Field(
         default=0,
@@ -556,7 +559,11 @@ class Incident(BaseModel):
                 )
 
         # Terminal status timestamp requirements
-        if self.status == IncidentStatus.RESOLVED and self.resolved_at is None and self.recovered_at is None:
+        if (
+            self.status == IncidentStatus.RESOLVED
+            and self.resolved_at is None
+            and self.recovered_at is None
+        ):
             raise ValueError("resolved_at is required when status=RESOLVED")
         if self.status == IncidentStatus.ESCALATED and self.escalated_at is None:
             raise ValueError("escalated_at is required when status=ESCALATED")
@@ -598,9 +605,18 @@ class Incident(BaseModel):
         data["recovery_actions"] = [action.to_dynamodb_map() for action in self.recovery_actions]
         # Exclude computed camelCase aliases from DynamoDB to keep storage clean
         excluded_computed = {
-            "incidentId", "resourceId", "failureType", "createdAt", "detectedAt",
-            "recoveryStartedAt", "recoveredAt", "recoveryAction", "recoveryResult",
-            "notificationStatus", "retryCount", "errorMessage"
+            "incidentId",
+            "resourceId",
+            "failureType",
+            "createdAt",
+            "detectedAt",
+            "recoveryStartedAt",
+            "recoveredAt",
+            "recoveryAction",
+            "recoveryResult",
+            "notificationStatus",
+            "retryCount",
+            "errorMessage",
         }
         cleaned = {k: v for k, v in data.items() if v is not None and k not in excluded_computed}
         return cast(dict[str, Any], _floats_to_decimals(cleaned))

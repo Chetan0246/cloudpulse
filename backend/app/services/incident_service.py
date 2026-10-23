@@ -96,4 +96,3 @@ class IncidentService:
             )
             for inc in incidents
         ]
-

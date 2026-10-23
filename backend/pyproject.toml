@@ -17,6 +17,10 @@ ignore = ["S101", "B008"]   # allow assert in tests and Depends/Query in FastAPI
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S105", "S106", "C408", "E501"]
+# camelCase computed properties are the stable dashboard/API contract.
+"app/models/incident.py" = ["N802"]
+# The strategies module must be loaded via importlib before it can be imported.
+"tests/unit/test_recovery_strategies.py" = ["E402"]
 
 [tool.mypy]
 python_version = "3.12"

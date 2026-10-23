@@ -117,8 +117,13 @@ class NotificationService:
 
         if transition == NotificationTransition.RECOVERY_STARTED:
             action = action_name or incident.recovery_action or "AUTOMATED_STRATEGY"
-            att_str = f"Attempt {attempt}/{max_attempts}" if attempt and max_attempts else f"Attempt {attempt or 1}"
+            att_str = (
+                f"Attempt {attempt}/{max_attempts}"
+                if attempt and max_attempts
+                else f"Attempt {attempt or 1}"
+            )
             subject = f"[CloudPulse] RECOVERY STARTED: {resource_id} — {failure_type}"
+            recovery_started = (incident.recovery_started_at or incident.detected_at).isoformat()
             body = (
                 f"{divider}\n"
                 f"CLOUDPULSE ALERT: Recovery Started\n"
@@ -130,7 +135,7 @@ class NotificationService:
                 f"Status:          {status_val}\n"
                 f"Recovery Action: {action}\n"
                 f"Progress:        {att_str}\n"
-                f"Started At:      {(incident.recovery_started_at or incident.detected_at).isoformat()}\n"
+                f"Started At:      {recovery_started}\n"
                 f"{divider}\n"
                 f"Description:\n"
                 f"Automated recovery workflow has started for resource '{resource_id}'.\n"
@@ -143,7 +148,9 @@ class NotificationService:
             action = action_name or incident.recovery_action or "RECOVERY_ACTION"
             dur = duration_seconds if duration_seconds is not None else incident.duration_seconds
             dur_str = f"{dur:.2f} seconds" if dur is not None else "N/A"
-            resolved_at = (incident.recovered_at or incident.resolved_at or incident.detected_at).isoformat()
+            resolved_at = (
+                incident.recovered_at or incident.resolved_at or incident.detected_at
+            ).isoformat()
             subject = f"[CloudPulse] RECOVERED: {resource_id} — {failure_type}"
             body = (
                 f"{divider}\n"
@@ -167,7 +174,11 @@ class NotificationService:
 
         if transition == NotificationTransition.RECOVERY_FAILED:
             err = error_message or incident.error_message or "Unknown recovery error"
-            att_str = f"Attempt {attempt}/{max_attempts}" if attempt and max_attempts else f"Attempt {attempt or 1}"
+            att_str = (
+                f"Attempt {attempt}/{max_attempts}"
+                if attempt and max_attempts
+                else f"Attempt {attempt or 1}"
+            )
             subject = f"[CloudPulse] RECOVERY FAILED: {resource_id} — {failure_type}"
             body = (
                 f"{divider}\n"
@@ -264,7 +275,9 @@ class NotificationService:
                 "incident_id": incident.incident_id,
                 "resource_id": incident.resource_id,
                 "transition": trans_val,
-                "status": "SENT" if success else ("NOT_CONFIGURED" if not self.topic_arn else "FAILED"),
+                "status": (
+                    "SENT" if success else ("NOT_CONFIGURED" if not self.topic_arn else "FAILED")
+                ),
             },
         )
 

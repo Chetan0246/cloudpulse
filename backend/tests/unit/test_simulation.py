@@ -28,10 +28,9 @@ from app.models.resource import (
     ResourceType,
     SimulatedResource,
 )
-from app.services.monitoring_service import MonitoringService
-from app.services.simulation_service import SimulationService
 from app.repositories.incident_repository import IncidentRepository
 from app.repositories.resource_repository import ResourceRepository
+from app.services.monitoring_service import MonitoringService
 from app.services.simulation_service import SimulationService
 
 

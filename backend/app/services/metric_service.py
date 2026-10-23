@@ -143,9 +143,7 @@ class MetricService:
         # A resource-filtered overview must not leak fleet-wide health data.
         if resource_id:
             normalized = resource_id.strip().upper()
-            resources = [
-                r for r in resources if r.resource_id.upper() == normalized
-            ]
+            resources = [r for r in resources if r.resource_id.upper() == normalized]
 
         now = datetime.now(UTC)
         w_type = window_type or MetricWindowType.DAILY
@@ -200,23 +198,17 @@ class MetricService:
         if window_type == MetricWindowType.WEEKLY:
             return now - timedelta(days=7)
         # CUMULATIVE: let the calculator derive the true start from the data.
-        detected = [
-            i.detected_at for i in incidents if getattr(i, "detected_at", None) is not None
-        ]
+        detected = [i.detected_at for i in incidents if getattr(i, "detected_at", None) is not None]
         return min(detected, default=None)
 
     @staticmethod
     def _summary_from_metric(metric: ReliabilityMetric) -> ReliabilityMetricSummary:
         concluded = metric.resolved_incidents + metric.failed_recoveries
         success_rate = (
-            round((metric.resolved_incidents / concluded) * 100.0, 2)
-            if concluded
-            else 100.0
+            round((metric.resolved_incidents / concluded) * 100.0, 2) if concluded else 100.0
         )
         failure_rate = (
-            round((metric.failed_recoveries / concluded) * 100.0, 2)
-            if concluded
-            else 0.0
+            round((metric.failed_recoveries / concluded) * 100.0, 2) if concluded else 0.0
         )
         return ReliabilityMetricSummary(
             resource_id=metric.resource_id,
@@ -266,9 +258,7 @@ class MetricService:
         Only records whose aggregate values changed are written. Failures are
         logged and ignored — a metrics outage must never break the dashboard.
         """
-        existing_by_key = {
-            (m.resource_id, m.window_key): m for m in (existing or [])
-        }
+        existing_by_key = {(m.resource_id, m.window_key): m for m in (existing or [])}
         for summary in summaries:
             key = (summary.resource_id, summary.window_key)
             previous = existing_by_key.get(key)

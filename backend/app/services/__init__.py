@@ -25,4 +25,3 @@ __all__ = [
     "SCENARIO_NAME_MAP",
     "compute_service_health",
 ]
-

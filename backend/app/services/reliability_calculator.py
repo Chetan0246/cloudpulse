@@ -20,8 +20,8 @@ Guarantees:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Sequence
 
 from app.models.incident import Incident, IncidentStatus, RecoveryActionStatus
 from app.models.reliability_metric import (
@@ -119,8 +119,7 @@ def calculate_recovery_success_rate(incidents: Sequence[Incident]) -> float:
         100.0 if no closed incidents exist (nominal baseline), rounded to 2 decimals.
     """
     closed = [
-        i for i in incidents
-        if i.status in (IncidentStatus.RESOLVED, IncidentStatus.ESCALATED)
+        i for i in incidents if i.status in (IncidentStatus.RESOLVED, IncidentStatus.ESCALATED)
     ]
     if not closed:
         return 100.0
@@ -144,8 +143,7 @@ def calculate_recovery_failure_rate(incidents: Sequence[Incident]) -> float:
         Guarantees: success_rate + failure_rate == 100.0 when closed > 0.
     """
     closed = [
-        i for i in incidents
-        if i.status in (IncidentStatus.RESOLVED, IncidentStatus.ESCALATED)
+        i for i in incidents if i.status in (IncidentStatus.RESOLVED, IncidentStatus.ESCALATED)
     ]
     if not closed:
         return 0.0
@@ -284,10 +282,14 @@ def calculate_incident_frequency(
     if window_start and window_end:
         w_start = _ensure_utc(window_start)
         w_end = _ensure_utc(window_end)
-        span_seconds = max(60.0, (w_end - w_start).total_seconds()) if w_start and w_end else 86400.0
+        span_seconds = (
+            max(60.0, (w_end - w_start).total_seconds()) if w_start and w_end else 86400.0
+        )
     elif count > 0:
         earliest = min(_ensure_utc(i.created_at) or datetime.now(UTC) for i in incidents)
-        latest = max(_ensure_utc(i.resolved_at or i.detected_at) or datetime.now(UTC) for i in incidents)
+        latest = max(
+            _ensure_utc(i.resolved_at or i.detected_at) or datetime.now(UTC) for i in incidents
+        )
         span_seconds = max(60.0, (latest - earliest).total_seconds())
     else:
         span_seconds = 86400.0
@@ -301,10 +303,7 @@ def calculate_incident_frequency(
     # MTBF: Mean time between consecutive failure detections
     mtbf: float | None = None
     if count >= 2:
-        sorted_detected = sorted(
-            _ensure_utc(i.detected_at) or datetime.now(UTC)
-            for i in incidents
-        )
+        sorted_detected = sorted(_ensure_utc(i.detected_at) or datetime.now(UTC) for i in incidents)
         deltas = [
             (sorted_detected[idx + 1] - sorted_detected[idx]).total_seconds()
             for idx in range(len(sorted_detected) - 1)
@@ -430,14 +429,16 @@ def calculate_resource_metric_summary(
             outage_end = w_end
         downtime_sec += _overlap_seconds(inc.detected_at, outage_end, w_start, w_end)
 
-    availability = round(
-        max(0.0, min(100.0, (1.0 - (downtime_sec / total_window_sec)) * 100.0)), 3
+    availability = round(max(0.0, min(100.0, (1.0 - (downtime_sec / total_window_sec)) * 100.0)), 3)
+
+    window_suffix = (
+        "ALL" if window_type == MetricWindowType.CUMULATIVE else w_start.strftime("%Y-%m-%d")
     )
 
     return ReliabilityMetricSummary(
         resource_id=resource_id.upper(),
         window_type=window_type,
-        window_key=f"{window_type.value}#{w_start.strftime('%Y-%m-%d') if window_type != MetricWindowType.CUMULATIVE else 'ALL'}",
+        window_key=f"{window_type.value}#{window_suffix}",
         window_start=w_start,
         window_end=w_end,
         total_incidents=total_inc,

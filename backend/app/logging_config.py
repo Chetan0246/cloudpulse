@@ -25,32 +25,34 @@ _incident_id_ctx: ContextVar[str | None] = ContextVar("incident_id", default=Non
 _stage_ctx: ContextVar[str | None] = ContextVar("stage", default=None)
 
 # Standard LogRecord attributes that should not be treated as custom extra fields
-_STANDARD_RECORD_ATTRS: frozenset[str] = frozenset({
-    "args",
-    "asctime",
-    "created",
-    "exc_info",
-    "exc_text",
-    "filename",
-    "funcName",
-    "levelname",
-    "levelno",
-    "lineno",
-    "module",
-    "msecs",
-    "message",
-    "msg",
-    "name",
-    "pathname",
-    "process",
-    "processName",
-    "relativeCreated",
-    "stack_info",
-    "thread",
-    "threadName",
-    "taskName",
-    "extra",
-})
+_STANDARD_RECORD_ATTRS: frozenset[str] = frozenset(
+    {
+        "args",
+        "asctime",
+        "created",
+        "exc_info",
+        "exc_text",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "module",
+        "msecs",
+        "message",
+        "msg",
+        "name",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "thread",
+        "threadName",
+        "taskName",
+        "extra",
+    }
+)
 
 
 def set_correlation_id(correlation_id: str | None) -> None:
