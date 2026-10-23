@@ -12,7 +12,7 @@
 |---|-------|--------|
 | 1 | Frontend builds | ✅ Clean (`tsc --noEmit && vite build` — 0 errors) |
 | 2 | Backend starts | ✅ FastAPI app factory imports cleanly; routes load correctly |
-| 3 | Tests pass | ✅ 367 backend / 49 frontend — all pass |
+| 3 | Tests pass | ✅ 372 backend / 49 frontend — all pass |
 | 4 | Infrastructure validates | ✅ `sam validate --lint` passes |
 | 5 | Environment configuration documented | ✅ `.env.example` + README (with port fix applied) |
 | 6 | API routes match frontend expectations | ✅ All 7 frontend API modules verified |
@@ -197,7 +197,7 @@ These are **accepted trade-offs** documented in `ARCHITECTURE_AUDIT.md`, not bug
 | SNS Notifications | **HIGH** | Duplicate guard verified; non-fatal failure handling correct |
 | FastAPI Backend | **HIGH** | Routes complete; exception handlers cover all domain errors |
 | React Frontend | **HIGH** | TypeScript types now fully match backend; build passes tsc --noEmit |
-| Testing | **HIGH** | 367 backend + 49 frontend tests; all core flows covered |
+| Testing | **HIGH** | 372 backend + 49 frontend tests; all core flows covered |
 | Observability | **HIGH** | Structured JSON logging; correlation IDs trace full lifecycle |
 | Security | **MEDIUM-HIGH** | No auth (by design for demo); CORS restricted; no secrets in repo |
 | Cost | **MEDIUM** | ~$0.80/month over free tier; acceptable for academic project |
@@ -217,5 +217,5 @@ The project correctly implements all five failure scenarios, autonomous event-dr
 | `.env.example` | `VITE_API_BASE_URL` corrected from `:3000` to `:8000` with explanatory comment |
 | `README.md` | Local dev instructions corrected: uvicorn (8000) vs SAM local (3000) |
 
-**Final test counts: 367 backend / 49 frontend — all pass.  
+**Final test counts: 372 backend / 49 frontend — all pass.  
 Frontend production build: clean (0 TypeScript errors, 0 warnings).**

@@ -411,4 +411,4 @@
 When defending CloudPulse in front of evaluators:
 1. **Never claim it touches real EC2/RDS instances.** State immediately and confidently: *"CloudPulse is a serverless control-plane simulator. It exercises genuine AWS monitoring, routing, compute, and alerting services while mutating virtual resource state in DynamoDB."*
 2. **Acknowledge the trade-offs before they point them out.** Mention: *"We intentionally chose a multi-table DynamoDB design for schema clarity over single-table optimization, and we chose adaptive polling over WebSockets to eliminate connection-management complexity."*
-3. **Point to your automated test coverage.** When asked if edge cases work: *"We have 367 backend tests and 49 frontend tests with 100% pass rate, covering idempotency, partial outages, and all 5 closed-loop failure scenarios."*
+3. **Point to your automated test coverage.** When asked if edge cases work: *"We have 372 backend tests and 49 frontend tests with 100% pass rate, covering idempotency, partial outages, and all 5 closed-loop failure scenarios."*

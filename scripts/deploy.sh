@@ -112,6 +112,19 @@ done
 
 STACK_NAME="cloudpulse-${ENV}"
 
+# Normalise and validate the execution mode before touching AWS. The SAM
+# template only accepts uppercase values, so a lowercase CLI flag would
+# otherwise fail mid-deployment.
+EXECUTION_MODE="${EXECUTION_MODE^^}"
+case "${EXECUTION_MODE}" in
+  SIMULATION|HYBRID|REAL_AWS) ;;
+  *)
+    echo -e "${RED}[ERROR] Invalid execution mode '${EXECUTION_MODE}'.${NC}"
+    echo "Use one of: SIMULATION, HYBRID, REAL_AWS"
+    exit 1
+    ;;
+esac
+
 echo -e "${BOLD}${BLUE}====================================================================${NC}"
 echo -e "${BOLD}${BLUE}   CloudPulse — Infrastructure Deployment Manager                   ${NC}"
 echo -e "${BOLD}${BLUE}====================================================================${NC}"
@@ -120,6 +133,8 @@ echo -e "  Stack Name:         ${YELLOW}${STACK_NAME}${NC}"
 echo -e "  AWS Region:         ${YELLOW}${REGION}${NC}"
 echo -e "  Template:           ${YELLOW}${TEMPLATE_FILE}${NC}"
 echo -e "  Notification Email: ${YELLOW}${NOTIFICATION_EMAIL:-<none>}${NC}"
+echo -e "  Execution Mode:     ${YELLOW}${EXECUTION_MODE}${NC}"
+echo -e "  Real AWS Allowlist: ${YELLOW}${REAL_AWS_ALLOWLIST:-<none>}${NC}"
 echo -e "  Dry Run:            ${YELLOW}${DRY_RUN}${NC}"
 echo ""
 
@@ -205,7 +220,12 @@ if [[ "${GUIDED}" = true ]]; then
     --region "${REGION}" \
     --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 else
-  PARAM_OVERRIDES="Environment=${ENV} ExecutionMode=${EXECUTION_MODE} RealAwsAllowlist=${REAL_AWS_ALLOWLIST}"
+  PARAM_OVERRIDES="Environment=${ENV} ExecutionMode=${EXECUTION_MODE}"
+  if [[ -n "${REAL_AWS_ALLOWLIST}" ]]; then
+    PARAM_OVERRIDES="${PARAM_OVERRIDES} RealAwsAllowlist=${REAL_AWS_ALLOWLIST}"
+  else
+    PARAM_OVERRIDES="${PARAM_OVERRIDES} ParameterKey=RealAwsAllowlist,ParameterValue=\"\""
+  fi
   if [[ -n "${NOTIFICATION_EMAIL}" ]]; then
     PARAM_OVERRIDES="${PARAM_OVERRIDES} NotificationEmail=${NOTIFICATION_EMAIL}"
   fi

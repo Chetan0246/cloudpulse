@@ -82,7 +82,7 @@ This design enables complete verification of distributed cloud resilience patter
 | Dimension | Specification / Metric | Status |
 |---|---|---|
 | **AWS Services** | API Gateway, Lambda (arm64), DynamoDB, EventBridge, CloudWatch, SNS, SQS, S3, IAM | Verified in SAM template |
-| **Backend Testing** | 367 automated unit, integration, edge-case, and scenario tests (`pytest`) | 100% Passed (0 failures) |
+| **Backend Testing** | 372 automated unit, integration, edge-case, and scenario tests (`pytest`) | 100% Passed (0 failures) |
 | **Frontend Testing** | 49 component, gauge, and end-to-end lifecycle tests (`vitest`) | 100% Passed (0 failures) |
 | **Frontend Build** | Strict TypeScript compilation (`tsc --noEmit`) and Vite bundle | 0 Errors, 0 Warnings |
 | **Infrastructure Validation** | AWS SAM template validation and linter (`sam validate --lint`) | Clean Pass |
