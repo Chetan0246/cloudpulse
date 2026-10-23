@@ -108,12 +108,14 @@ Parameters:
 
   RealAlbListenerRuleArn:
     Type: String
-    Default: ""
+    Default: "arn:aws:elasticloadbalancing:us-east-1:000000000000:listener-rule/app/cloudpulse-disabled/0000000000000000/0000000000000000/0000000000000000"
+    AllowedPattern: "^arn:aws[a-zA-Z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:listener-rule/app/.+$"
     Description: Exact ALB listener rule ARN allowed for the network reroute action.
 
   RealAlternateTargetGroupArn:
     Type: String
-    Default: ""
+    Default: "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/cloudpulse-disabled/0000000000000000"
+    AllowedPattern: "^arn:aws[a-zA-Z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:targetgroup/.+$"
     Description: Exact healthy alternate target group ARN used by network reroute.
 
   RealAlternateInstanceId:
@@ -124,7 +126,8 @@ Parameters:
 
   RealFailoverTargetGroupArn:
     Type: String
-    Default: ""
+    Default: "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/cloudpulse-disabled/0000000000000000"
+    AllowedPattern: "^arn:aws[a-zA-Z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:targetgroup/.+$"
     Description: Exact target group containing both configured primary and standby targets.
 
   RealStandbyInstanceId:
@@ -146,6 +149,27 @@ Parameters:
 # ──────────────────────────────────────────────────────────────────────────────
 # Conditions
 # ──────────────────────────────────────────────────────────────────────────────
+Rules:
+  RealRemediationRequiresConfiguredTargets:
+    RuleCondition: !Equals [!Ref RealRemediationEnabled, "true"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref RealAllowedResourceId, ""]]
+        AssertDescription: RealAllowedResourceId must be set when real remediation is enabled.
+      - Assert: !Not [!Equals [!Ref RealEc2InstanceId, ""]]
+        AssertDescription: RealEc2InstanceId must be set when real remediation is enabled.
+      - Assert: !Not [!Equals [!Ref RealAsgName, ""]]
+        AssertDescription: RealAsgName must be set when real remediation is enabled.
+      - Assert: !Not [!Equals [!Ref RealAlbListenerRuleArn, "arn:aws:elasticloadbalancing:us-east-1:000000000000:listener-rule/app/cloudpulse-disabled/0000000000000000/0000000000000000/0000000000000000"]]
+        AssertDescription: Replace the inert listener-rule ARN before enabling real remediation.
+      - Assert: !Not [!Equals [!Ref RealAlternateTargetGroupArn, "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/cloudpulse-disabled/0000000000000000"]]
+        AssertDescription: Replace the inert alternate target group ARN before enabling real remediation.
+      - Assert: !Not [!Equals [!Ref RealAlternateInstanceId, ""]]
+        AssertDescription: RealAlternateInstanceId must be set when real remediation is enabled.
+      - Assert: !Not [!Equals [!Ref RealFailoverTargetGroupArn, "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/cloudpulse-disabled/0000000000000000"]]
+        AssertDescription: Replace the inert failover target group ARN before enabling real remediation.
+      - Assert: !Not [!Equals [!Ref RealStandbyInstanceId, ""]]
+        AssertDescription: RealStandbyInstanceId must be set when real remediation is enabled.
+
 Conditions:
   CreateEmailSubscription: !Not [!Equals [!Ref NotificationEmail, ""]]
   IsPublicFrontendEnabled: !Equals [!Ref EnablePublicFrontendBucket, "true"]
