@@ -328,7 +328,12 @@ def handler(event: dict, context: Any) -> dict:
         # The strategy's virtual metric delta still updates the demo record for audit/UI
         # continuity; the real AWS effect is separately recorded in outcome_msg.
         outcome_msg, metrics_delta = strategy.execute(resource_id)
-        if os.environ.get("REAL_REMEDIATION_ENABLED", "false").lower() == "true":
+        real_target = os.environ.get("REAL_ALLOWED_RESOURCE_ID", "").strip()
+        if (
+            os.environ.get("REAL_REMEDIATION_ENABLED", "false").lower() == "true"
+            and real_target
+            and resource_id == real_target
+        ):
             outcome_msg = execute_real_remediation(failure_type, resource_id)
         recovery_end_time = datetime.now(timezone.utc)
 
