@@ -116,6 +116,12 @@ Parameters:
     Default: ""
     Description: Exact healthy alternate target group ARN used by network reroute.
 
+  RealAlternateInstanceId:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^i-[a-f0-9]+$"
+    Description: Distinct healthy EC2 target registered in the alternate target group.
+
   RealFailoverTargetGroupArn:
     Type: String
     Default: ""
@@ -381,6 +387,7 @@ Resources:
           REAL_ASG_NAME: !Ref RealAsgName
           REAL_ALB_LISTENER_RULE_ARN: !Ref RealAlbListenerRuleArn
           REAL_ALTERNATE_TARGET_GROUP_ARN: !Ref RealAlternateTargetGroupArn
+          REAL_ALTERNATE_INSTANCE_ID: !Ref RealAlternateInstanceId
           REAL_FAILOVER_TARGET_GROUP_ARN: !Ref RealFailoverTargetGroupArn
           REAL_PRIMARY_INSTANCE_ID: !Ref RealEc2InstanceId
           REAL_STANDBY_INSTANCE_ID: !Ref RealStandbyInstanceId
