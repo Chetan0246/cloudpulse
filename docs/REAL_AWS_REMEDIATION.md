@@ -15,7 +15,7 @@ A single standalone EC2 instance cannot safely perform all five actions. The rea
 - A target group with both the primary and healthy standby registered for failover.
 - Network connectivity from the Recovery Lambda to AWS APIs through normal AWS service endpoints; the EC2 instance must be reachable by Systems Manager.
 
-The adapter only uses deployment parameters for AWS resource IDs and ARNs. It does not treat EventBridge detail, API body, or simulator resource data as a target or command source.
+The adapter only uses deployment parameters for AWS resource IDs and ARNs. It does not treat EventBridge detail, API body, or simulator resource data as a target or command source. Because an allowed failure event can trigger an action against the one configured target, require authenticated operator access to failure injection and restrict API access before enabling real mode.
 
 ## Five real action mappings
 
@@ -69,10 +69,19 @@ Verify the deployed configuration before triggering a demo:
 ~~~bash
 aws cloudformation describe-stacks --stack-name cloudpulse-dev \
   --query 'Stacks[0].Parameters'
-aws iam simulate-principal-policy \
-  --policy-source-arn "$(aws iam get-role --role-name cloudpulse-recovery-role-dev --query 'Role.Arn' --output text)" \
-  --action-names autoscaling:SetDesiredCapacity ssm:SendCommand elasticloadbalancing:ModifyRule elasticloadbalancing:DeregisterTargets \
-  --resource-arns REPLACE_WITH_EXACT_CONFIGURED_ARN
+RECOVERY_ROLE_ARN="$(aws iam get-role --role-name cloudpulse-recovery-role-dev --query 'Role.Arn' --output text)"
+aws iam simulate-principal-policy --policy-source-arn "$RECOVERY_ROLE_ARN" \
+  --action-names autoscaling:SetDesiredCapacity \
+  --resource-arns REPLACE_WITH_CONFIGURED_ASG_ARN
+aws iam simulate-principal-policy --policy-source-arn "$RECOVERY_ROLE_ARN" \
+  --action-names ssm:SendCommand \
+  --resource-arns arn:aws:ssm:REGION::document/AWS-RunShellScript arn:aws:ec2:REGION:ACCOUNT:instance/PRIMARY_INSTANCE_ID
+aws iam simulate-principal-policy --policy-source-arn "$RECOVERY_ROLE_ARN" \
+  --action-names elasticloadbalancing:ModifyRule \
+  --resource-arns REPLACE_WITH_CONFIGURED_LISTENER_RULE_ARN
+aws iam simulate-principal-policy --policy-source-arn "$RECOVERY_ROLE_ARN" \
+  --action-names elasticloadbalancing:DeregisterTargets \
+  --resource-arns REPLACE_WITH_CONFIGURED_FAILOVER_TARGET_GROUP_ARN
 aws ssm describe-instance-information --filters Key=InstanceIds,Values=i-REPLACE_WITH_DEMO_PRIMARY
 aws elbv2 describe-target-health --target-group-arn REPLACE_WITH_FAILOVER_TARGET_GROUP_ARN
 ~~~
