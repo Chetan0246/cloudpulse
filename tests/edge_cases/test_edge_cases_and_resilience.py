@@ -50,7 +50,7 @@ class TestEdgeCasesAndResilience:
     ):
         """
         When a recovery strategy raises RecoveryStrategyError on attempt 1:
-        - Lambda returns 500
+        - Lambda raises so the invocation is retried (RECOVERY_FAILED is retryable)
         - Resource transitions to RECOVERY_FAILED
         - Incident status remains RECOVERING with 1 FAILED RecoveryAction
         - SNS recovery failure notification is dispatched
@@ -74,10 +74,8 @@ class TestEdgeCasesAndResilience:
         mock_strategy.execute.side_effect = RecoveryStrategyError("EC2 API throttling simulated")
 
         with patch("handler.dispatch_strategy", return_value=mock_strategy):
-            result = handler(alarm_event, context=MagicMock())
-
-        assert result["statusCode"] == 500
-        assert "Recovery failed after 1 attempt" in result["body"]
+            with pytest.raises(RuntimeError, match="Recovery failed after 1 attempt"):
+                handler(alarm_event, context=MagicMock())
 
         updated_res = res_repo.get(resource_id)
         assert updated_res.current_state == ResourceState.RECOVERY_FAILED
@@ -104,6 +102,7 @@ class TestEdgeCasesAndResilience:
         - Resource transitions to MANUAL_INTERVENTION_REQUIRED
         - Incident transitions to ESCALATED with escalated_at set
         - Total recovery_attempts == 3 with 3 FAILED recovery actions
+        - The invocation is acknowledged (no further retry is useful)
         """
         res_repo = ResourceRepository()
         inc_repo = IncidentRepository()
@@ -164,8 +163,9 @@ class TestEdgeCasesAndResilience:
         with patch("handler.dispatch_strategy", return_value=mock_strategy):
             result = handler(alarm_event, context=MagicMock())
 
-        assert result["statusCode"] == 500
+        assert result["statusCode"] == 200
         assert f"Recovery failed after {MAX_RECOVERY_ATTEMPTS} attempt" in result["body"]
+        assert "escalated" in result["body"].lower()
 
         updated_res = res_repo.get(resource_id)
         assert updated_res.current_state == ResourceState.MANUAL_INTERVENTION_REQUIRED

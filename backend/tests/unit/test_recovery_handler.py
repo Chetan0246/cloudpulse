@@ -403,12 +403,11 @@ class TestIdempotencyGuard:
         with pytest.raises(ValueError, match="Cannot parse event"):
             h.handler(event, MagicMock())
 
-    def test_state_transition_failure_returns_500(self) -> None:
-        """DynamoDB errors during update_state transition return HTTP 500.
+    def test_state_transition_failure_raises_for_retry(self) -> None:
+        """DynamoDB errors during update_state are re-raised so Lambda retries.
 
-        The handler does a pre-read (get()) then calls update_state().
-        The pre-read must return FAILURE_DETECTED so the handler proceeds
-        to update_state, which then fails.
+        Returning a 500 dictionary would mark the invocation successful and
+        permanently lose the event; raising engages the retry policy / DLQ.
         """
         from app.models.resource import ResourceState
 
@@ -433,8 +432,8 @@ class TestIdempotencyGuard:
             },
         }
 
-        result = h.handler(event, MagicMock())
-        assert result["statusCode"] == 500
+        with pytest.raises(Exception, match="DynamoDB throttled"):
+            h.handler(event, MagicMock())
 
 
 # ── SNS notification tests ────────────────────────────────────────────────────

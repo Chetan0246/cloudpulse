@@ -268,12 +268,23 @@ class NotificationService:
             },
         )
 
-        new_transitions = [*incident.notified_transitions, trans_val]
-        updated_incident = incident.model_copy(
-            update={
+        # Only a successfully published notification is recorded. Recording a
+        # failed attempt would hit the deduplication guard above and silently
+        # suppress every future retry of that transition.
+        new_transitions = (
+            [*incident.notified_transitions, trans_val]
+            if success
+            else list(incident.notified_transitions)
+        )
+        status = "SENT" if success else ("NOT_CONFIGURED" if not self.topic_arn else "FAILED")
+
+        # Re-validate so the derived `notification_sent` flag stays consistent
+        # with `notification_status`.
+        updated_incident = Incident.model_validate(
+            {
+                **{name: getattr(incident, name) for name in Incident.model_fields},
                 "notified_transitions": new_transitions,
-                "notification_status": "SENT" if success else ("NOT_CONFIGURED" if not self.topic_arn else "FAILED"),
-                "notification_sent": True if success else incident.notification_sent,
+                "notification_status": status,
             }
         )
         return updated_incident, success

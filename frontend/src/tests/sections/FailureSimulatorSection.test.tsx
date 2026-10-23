@@ -1,16 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { FailureSimulatorSection } from '../../components/sections/FailureSimulatorSection';
-import { simulateApi } from '../../api/simulate';
 import type { ResourceSummary } from '../../api/types';
-
-vi.mock('../../api/simulate', () => ({
-  simulateApi: {
-    inject: vi.fn(),
-    reset: vi.fn(),
-    recover: vi.fn(),
-  },
-}));
 
 const mockResources: ResourceSummary[] = [
   {
@@ -64,15 +55,6 @@ describe('FailureSimulatorSection', () => {
   });
 
   it('progresses through complete 5-stage lifecycle: Healthy → Failure → Detection → Recovery → Recovered', async () => {
-    vi.mocked(simulateApi.recover).mockResolvedValue({
-      message: 'Resource VM-001 successfully recovered',
-      scenario_id: 'FS-01',
-      scenario_name: 'FS-01 High CPU Utilization',
-      resource: { ...mockResources[0], current_state: 'HEALTHY' } as any,
-      incident: { incident_id: 'recovered-inc-123' } as any,
-      metrics_emitted: { CPUUtilization: 25.0 },
-    });
-
     const handleInject = vi.fn().mockResolvedValue({
       message: "Simulated failure 'High CPU' successfully injected",
       incident: { incident_id: 'new-inc-123' },

@@ -527,11 +527,10 @@ class Incident(BaseModel):
             if latest.status == RecoveryActionStatus.FAILED and latest.error_detail:
                 self.error_message = latest.error_detail
 
-        # Sync notification status and boolean
-        if self.notification_status == "SENT" or len(self.notified_transitions) > 0:
-            self.notification_sent = True
-        elif self.notification_sent and self.notification_status == "NOT_SENT":
-            self.notification_status = "SENT"
+        # `notification_status` is the authoritative field; `notification_sent`
+        # is derived from it. A FAILED / NOT_CONFIGURED attempt must never
+        # report success merely because some earlier transition succeeded.
+        self.notification_sent = self.notification_status == "SENT"
 
         # Timestamp ordering
         effective_resolved = self.resolved_at or self.recovered_at

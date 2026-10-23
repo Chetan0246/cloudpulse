@@ -151,7 +151,7 @@ cd frontend && npm run test
 ## Adding a New AWS Service
 
 1. Justify it. Write a new ADR in `docs/adr/`.
-2. Add it to the SAM template in `infrastructure/sam/template.yaml`.
+2. Add it to the SAM template in `infrastructure/template.yaml`.
 3. Add the IAM permission to the specific Lambda role that needs it.
 4. Update `ARCHITECTURE.md`.
 5. Update `.env.example` if a new environment variable is needed.

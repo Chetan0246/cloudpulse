@@ -1,7 +1,7 @@
 # IAM Policies
 
 IAM roles and policies are defined inline in the SAM template
-(`infrastructure/sam/template.yaml`) for each Lambda function.
+(`infrastructure/template.yaml`) for each Lambda function.
 
 This directory is reserved for:
 - Standalone IAM policy documents that need to be referenced externally

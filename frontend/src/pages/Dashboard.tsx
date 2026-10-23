@@ -73,13 +73,15 @@ export const Dashboard: React.FC = () => {
     try {
       setFetchError(null);
 
-      // Verify health probe alongside resources, incidents, metrics snapshots, and fleet SRE overview
+      // Verify health probe alongside resources, incidents, metrics snapshots, and fleet SRE overview.
+      // Only the health probe is optional; telemetry failures must surface instead of
+      // being silently replaced with empty arrays.
       const [healthRes, resList, incList, metList, overviewRes] = await Promise.all([
         healthApi.check().catch(() => null),
-        resourcesApi.list().catch(() => [] as ResourceSummary[]),
-        incidentsApi.list({ limit: 100 }).catch(() => [] as IncidentSummary[]),
-        metricsApi.list({ window_type: metricsWindow, limit: 50 }).catch(() => [] as ReliabilityMetric[]),
-        metricsApi.getOverview(metricsWindow).catch(() => null),
+        resourcesApi.list(),
+        incidentsApi.list({ limit: 100 }),
+        metricsApi.list({ window_type: metricsWindow, limit: 50 }),
+        metricsApi.getOverview(metricsWindow),
       ]);
 
       setApiConnected(healthRes?.status === 'ok' || resList.length > 0);
@@ -158,6 +160,9 @@ export const Dashboard: React.FC = () => {
 
   // Safe Optimistic Handlers
   const handleResetResource = async (resourceId: string) => {
+    // Keep a snapshot so a failed request can roll the optimistic UI back.
+    const previousResources = resources;
+
     // 1. Safe optimistic update: immediately mark resource healthy in UI
     setResources((prev) =>
       prev.map((r) =>
@@ -176,11 +181,20 @@ export const Dashboard: React.FC = () => {
       )
     );
 
-    // 2. Call backend API
-    await simulateApi.reset(resourceId);
+    try {
+      // 2. Call backend API
+      await simulateApi.reset(resourceId);
 
-    // 3. Confirm with fresh server fetch
-    await fetchAllTelemetry(true);
+      // 3. Confirm with fresh server fetch
+      await fetchAllTelemetry(true);
+    } catch (err: any) {
+      // Roll back so the UI never claims a reset that did not happen.
+      setResources(previousResources);
+      const message =
+        err.response?.data?.detail || err.message || 'Failed to reset resource';
+      setFetchError(message);
+      throw err;
+    }
   };
 
   const handleInjectFailure = async (
@@ -188,6 +202,8 @@ export const Dashboard: React.FC = () => {
     failureType: FailureType,
     severity: IncidentSeverity
   ) => {
+    const previousResources = resources;
+
     // 1. Safe optimistic update: reflect failure state immediately
     setResources((prev) =>
       prev.map((r) =>
@@ -202,12 +218,20 @@ export const Dashboard: React.FC = () => {
       )
     );
 
-    // 2. Call backend API POST /simulate/failure
-    const response = await simulateApi.inject(resourceId, failureType, severity);
+    try {
+      // 2. Call backend API POST /simulate/failure
+      const response = await simulateApi.inject(resourceId, failureType, severity);
 
-    // 3. Confirm with fresh server fetch
-    await fetchAllTelemetry(true);
-    return response;
+      // 3. Confirm with fresh server fetch
+      await fetchAllTelemetry(true);
+      return response;
+    } catch (err: any) {
+      setResources(previousResources);
+      const message =
+        err.response?.data?.detail || err.message || 'Failed to inject failure';
+      setFetchError(message);
+      throw err;
+    }
   };
 
   const handleSelectIncident = (incidentId: string) => {
@@ -259,6 +283,21 @@ export const Dashboard: React.FC = () => {
           />
         ) : (
           <div>
+            {fetchError && resources.length > 0 && (
+              <div className="mb-4 flex flex-col gap-2 rounded-lg border border-amber-700/60 bg-amber-950/40 px-4 py-3 text-sm text-amber-200 sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  <span className="font-semibold">Telemetry sync failed:</span> {fetchError}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => fetchAllTelemetry(true)}
+                  className="self-start rounded border border-amber-600 px-3 py-1 text-xs font-semibold text-amber-100 hover:bg-amber-900/60 sm:self-auto"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
             {activeTab === 'overview' && (
               <OverviewSection
                 resources={resources}

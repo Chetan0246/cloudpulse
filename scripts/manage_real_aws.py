@@ -112,12 +112,11 @@ def register_real_resource(resource_id: str, resource_type: str, description: st
     now_iso = datetime.now(UTC).isoformat()
 
     item = {
-        "resource_id": resource_id.strip(),
+        "resource_id": resource_id.strip().upper(),
         "resource_type": resource_type.upper(),
         "description": description or f"Live AWS {resource_type} registered via CLI",
         "current_state": "HEALTHY",
         "health_status": "HEALTHY",
-        "active_failure_type": None,
         "cpu_utilization": Decimal("20.0"),
         "memory_utilization": Decimal("25.0"),
         "storage_utilization": Decimal("15.0"),
@@ -125,7 +124,10 @@ def register_real_resource(resource_id: str, resource_type: str, description: st
         "created_at": now_iso,
         "updated_at": now_iso,
         "last_heartbeat": now_iso,
-        "tags": {"ManagedBy": "CloudPulse", "ExecutionMode": "HYBRID"},
+        "tags": {
+            "ManagedBy": "CloudPulse",
+            "ExecutionMode": os.environ.get("EXECUTION_MODE", "SIMULATION").upper(),
+        },
     }
 
     try:

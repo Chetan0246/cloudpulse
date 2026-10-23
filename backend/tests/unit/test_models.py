@@ -261,9 +261,12 @@ class TestSimulatedResourceStateMachine:
     def test_warning_can_return_to_healthy(self):
         assert ResourceState.WARNING.can_transition_to(ResourceState.HEALTHY)
 
-    def test_failure_detected_can_only_go_to_recovery_initiated(self):
+    def test_failure_detected_transitions(self):
         assert ResourceState.FAILURE_DETECTED.can_transition_to(ResourceState.RECOVERY_INITIATED)
-        assert not ResourceState.FAILURE_DETECTED.can_transition_to(ResourceState.HEALTHY)
+        # Manual reset via /simulate/reset is an explicit operator escape hatch.
+        assert ResourceState.FAILURE_DETECTED.can_transition_to(ResourceState.HEALTHY)
+        # But the automated flow cannot skip recovery entirely.
+        assert not ResourceState.FAILURE_DETECTED.can_transition_to(ResourceState.RECOVERED)
 
     def test_recovered_is_terminal(self):
         # RECOVERED is terminal: no *automatic* transitions are triggered by the

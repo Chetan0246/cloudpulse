@@ -360,6 +360,7 @@ class ReliabilityMetricSummary(BaseModel):
     mtbf_seconds: float | None
     availability_pct: float | None
     computed_at: datetime
+    failure_type_counts: dict[str, int] = Field(default_factory=dict)
     recovery_success_rate_pct: float = 100.0
     recovery_failure_rate_pct: float = 0.0
     avg_recovery_time_seconds: float | None = None

@@ -34,10 +34,21 @@ from app.models.resource import (
 )
 from app.repositories.incident_repository import IncidentRepository
 from app.repositories.resource_repository import ResourceRepository
+from app.services.metric_service import MetricService
 from app.services.monitoring_service import MonitoringService
 from app.services.notification_service import NotificationService
 
 logger = logging.getLogger(__name__)
+
+# Hard bounds for client-supplied metric overrides. These mirror the field
+# constraints on SimulatedResource; validating here prevents a bad override
+# from being persisted (which would make every subsequent read fail).
+_METRIC_BOUNDS: dict[str, tuple[float, float]] = {
+    "cpu_utilization": (0.0, 100.0),
+    "memory_utilization": (0.0, 100.0),
+    "storage_utilization": (0.0, 100.0),
+    "network_latency_ms": (0.0, 99999.0),
+}
 
 
 # Scenario mappings
@@ -85,11 +96,16 @@ class SimulationService:
         incident_repo: IncidentRepository | None = None,
         monitoring_service: MonitoringService | None = None,
         notification_service: NotificationService | None = None,
+        metric_service: MetricService | None = None,
     ) -> None:
         self._resource_repo = resource_repo or ResourceRepository()
         self._incident_repo = incident_repo or IncidentRepository()
         self._monitoring = monitoring_service or MonitoringService()
         self._notification = notification_service or NotificationService()
+        self._metric_service = metric_service or MetricService(
+            incident_repo=self._incident_repo,
+            resource_repo=self._resource_repo,
+        )
 
     def inject_failure(
         self,
@@ -118,12 +134,7 @@ class SimulationService:
         resource = self._resource_repo.get(norm_resource_id)
 
         # 1. State machine validation
-        allowed_states = {
-            ResourceState.HEALTHY,
-            ResourceState.WARNING,
-            ResourceState.RECOVERED,
-        }
-        if resource.current_state not in allowed_states:
+        if not resource.current_state.can_transition_to(ResourceState.FAILURE_DETECTED):
             raise SimulationError(
                 f"Cannot inject failure: resource '{norm_resource_id}' is currently in state "
                 f"'{resource.current_state.value}'. "
@@ -134,15 +145,25 @@ class SimulationService:
         metrics = dict(FAILURE_METRIC_TARGETS[failure_type])
         params = parameters or {}
 
-        # Allow parameters to override metric targets if provided
-        for metric_key in (
-            "cpu_utilization",
-            "memory_utilization",
-            "storage_utilization",
-            "network_latency_ms",
-        ):
-            if metric_key in params and isinstance(params[metric_key], int | float):
-                metrics[metric_key] = float(params[metric_key])
+        # Allow parameters to override metric targets if provided. Overrides are
+        # validated against the same bounds as SimulatedResource so a bad value
+        # can never reach DynamoDB and poison every later read.
+        for metric_key, (lower, upper) in _METRIC_BOUNDS.items():
+            if metric_key not in params:
+                continue
+            raw_value = params[metric_key]
+            if isinstance(raw_value, bool) or not isinstance(raw_value, int | float):
+                raise SimulationError(
+                    f"Invalid override for '{metric_key}': expected a number, "
+                    f"got {type(raw_value).__name__}"
+                )
+            value = float(raw_value)
+            if not lower <= value <= upper:
+                raise SimulationError(
+                    f"Invalid override for '{metric_key}': {value} is outside "
+                    f"the allowed range [{lower}, {upper}]"
+                )
+            metrics[metric_key] = value
 
         scenario_code = SCENARIO_CODE_MAP[failure_type]
         incident_id = str(uuid.uuid4())
@@ -164,8 +185,9 @@ class SimulationService:
         )
 
         now = datetime.now(UTC)
-        updated_resource = resource.model_copy(
-            update={
+        updated_resource = SimulatedResource.model_validate(
+            {
+                **{name: getattr(resource, name) for name in SimulatedResource.model_fields},
                 **metrics,
                 "current_state": ResourceState.FAILURE_DETECTED,
                 "health_status": HealthStatus.CRITICAL,
@@ -214,6 +236,9 @@ class SimulationService:
         incident, _ = self._notification.notify_failure_detected(incident)
         self._incident_repo.update(incident)
 
+        # 5c. Persist a reliability snapshot for the new incident (non-fatal)
+        self._persist_snapshot(norm_resource_id)
+
         # 6. Emit EventBridge FailureInjected event (non-fatal, bypasses alarm wait)
         set_trace_stage("event")
         self._monitoring.emit_failure_event(
@@ -248,9 +273,16 @@ class SimulationService:
         resource = self._resource_repo.get(norm_resource_id)
         now = datetime.now(UTC)
 
+        if not resource.current_state.can_transition_to(ResourceState.HEALTHY):
+            raise SimulationError(
+                f"Cannot reset resource '{norm_resource_id}' from state "
+                f"'{resource.current_state.value}'."
+            )
+
         # Reset resource state and metrics to nominal
-        updated_resource = resource.model_copy(
-            update={
+        updated_resource = SimulatedResource.model_validate(
+            {
+                **{name: getattr(resource, name) for name in SimulatedResource.model_fields},
                 **_NOMINAL_METRICS,
                 "current_state": ResourceState.HEALTHY,
                 "health_status": HealthStatus.HEALTHY,
@@ -284,8 +316,9 @@ class SimulationService:
                     ),
                 )
                 duration = (now - inc.detected_at).total_seconds()
-                updated_inc = inc.model_copy(
-                    update={
+                updated_inc = Incident.model_validate(
+                    {
+                        **{name: getattr(inc, name) for name in Incident.model_fields},
                         "status": IncidentStatus.RESOLVED,
                         "state_at_resolution": ResourceState.RECOVERED,
                         "resolved_at": now,
@@ -302,15 +335,23 @@ class SimulationService:
                 self._incident_repo.update(updated_inc)
                 resolved_ids.append(inc.incident_id)
 
-        logger.info(
-            "Resource manually reset to HEALTHY",
-            extra={"resource_id": norm_resource_id, "resolved_incidents": resolved_ids},
-        )
-        return updated_resource, resolved_ids
+        # Refresh the persisted reliability snapshot (non-fatal)
+        self._persist_snapshot(norm_resource_id)
 
         logger.info(
             "Resource manually reset to HEALTHY",
             extra={"resource_id": norm_resource_id, "resolved_incidents": resolved_ids},
         )
         return updated_resource, resolved_ids
+
+    def _persist_snapshot(self, resource_id: str) -> None:
+        """Persist a reliability snapshot without ever failing the caller."""
+        try:
+            self._metric_service.persist_snapshot(resource_id)
+        except Exception:
+            logger.warning(
+                "Failed to persist reliability snapshot for %s (non-fatal)",
+                resource_id,
+                exc_info=True,
+            )
 

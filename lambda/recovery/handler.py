@@ -20,10 +20,12 @@ Recovery state machine:
     → MANUAL_INTERVENTION_REQUIRED (max attempts exhausted)
 
 Idempotency (two-layer guard):
-  Layer 1 — Pre-read: if resource is not FAILURE_DETECTED, exit immediately.
+  Layer 1 — Pre-read: if resource is neither FAILURE_DETECTED nor
+             RECOVERY_FAILED (retry), exit immediately.
   Layer 2 — Conditional DynamoDB update: only succeeds when current_state
-             equals FAILURE_DETECTED. Concurrent duplicate events are
-             serialised by DynamoDB conditional expressions.
+             is one of the states accepted by the pre-read. Concurrent
+             duplicate events are serialised by DynamoDB conditional
+             expressions.
 
 Audit trail:
   Every recovery attempt creates a RecoveryAction embedded in the Incident
@@ -61,14 +63,26 @@ from app.models.incident import (
     RecoveryActionStatus,
     RecoveryActionType,
 )
-from app.models.resource import FailureType, HealthStatus, ResourceState
+from app.models.resource import (
+    FailureType,
+    HealthStatus,
+    ResourceState,
+    SimulatedResource,
+)
 from app.repositories.incident_repository import IncidentRepository
 from app.repositories.resource_repository import ResourceRepository
 from app.services.monitoring_service import MonitoringService
-from app.services.notification_service import NotificationService, NotificationTransition
-from strategies import MAX_RECOVERY_ATTEMPTS, RecoveryStrategyError, dispatch_strategy
+from app.services.notification_service import NotificationService
+from strategies import MAX_RECOVERY_ATTEMPTS, dispatch_strategy
 
 logger = logging.getLogger(__name__)
+
+# A retry is possible from a fresh detection or from a previously failed
+# attempt. Anything else means recovery is already running or has finished.
+_RETRYABLE_STATES = {
+    ResourceState.FAILURE_DETECTED,
+    ResourceState.RECOVERY_FAILED,
+}
 
 
 # ── Event Parsing ──────────────────────────────────────────────────────────────
@@ -199,7 +213,7 @@ def handler(event: dict, context: Any) -> dict:
     # DynamoDB conditionals unnecessarily.
     try:
         pre_update_resource = resource_repo.get(resource_id)
-        if pre_update_resource.current_state != ResourceState.FAILURE_DETECTED:
+        if pre_update_resource.current_state not in _RETRYABLE_STATES:
             logger.info(
                 "Recovery already in progress or completed — skipping (idempotent)",
                 extra={
@@ -210,16 +224,21 @@ def handler(event: dict, context: Any) -> dict:
             return {"statusCode": 200, "body": "Already recovering"}
 
         # ── 3. Transition resource to RECOVERY_INITIATED ───────────────────────
-        # Conditional write: only succeeds if current_state == FAILURE_DETECTED.
-        # This handles concurrent duplicate events that both pass the pre-read.
+        # Conditional write: only succeeds if the resource is still in a state
+        # from which a (re)try is valid. This handles concurrent duplicate
+        # events that both pass the pre-read, and it also makes the retry path
+        # (RECOVERY_FAILED → RECOVERY_INITIATED) atomic.
         updated_resource = resource_repo.update_state(
             resource_id=resource_id,
             new_state=ResourceState.RECOVERY_INITIATED,
-            condition_state=ResourceState.FAILURE_DETECTED,
+            condition_states=_RETRYABLE_STATES,
         )
     except Exception:
+        # A DynamoDB failure here is retryable: re-raise so the Lambda retry
+        # policy (and eventually the DLQ) engages instead of silently
+        # acknowledging a lost event.
         logger.exception("Failed to transition resource to RECOVERY_INITIATED")
-        return {"statusCode": 500, "body": "State transition failed"}
+        raise
 
     if updated_resource.current_state != ResourceState.RECOVERY_INITIATED:
         logger.info(
@@ -291,7 +310,11 @@ def handler(event: dict, context: Any) -> dict:
         incident, _ = notification_svc.notify_failure_detected(incident)
 
     # ── 5. Transition resource to RECOVERY_IN_PROGRESS ────────────────────────
-    resource_repo.update_state(resource_id, ResourceState.RECOVERY_IN_PROGRESS)
+    resource_repo.update_state(
+        resource_id,
+        ResourceState.RECOVERY_IN_PROGRESS,
+        condition_state=ResourceState.RECOVERY_INITIATED,
+    )
 
     # ── 6. Execute recovery strategy ───────────────────────────────────────────
     recovery_start_time = datetime.now(timezone.utc)
@@ -340,8 +363,12 @@ def handler(event: dict, context: Any) -> dict:
 
         # Apply metric delta to resource and persist
         current_resource = resource_repo.get(resource_id)
-        updated_resource_obj = current_resource.model_copy(
-            update={
+        updated_resource_obj = SimulatedResource.model_validate(
+            {
+                **{
+                    name: getattr(current_resource, name)
+                    for name in SimulatedResource.model_fields
+                },
                 **metrics_delta,
                 "current_state": ResourceState.RECOVERED,
                 "health_status": HealthStatus.HEALTHY,
@@ -356,8 +383,9 @@ def handler(event: dict, context: Any) -> dict:
         # Build updated incident with recovery action logged
         new_actions = [*incident.recovery_actions, new_action]
         recovery_initiated_at = incident.recovery_initiated_at or recovery_start_time
-        resolved_incident = incident.model_copy(
-            update={
+        resolved_incident = Incident.model_validate(
+            {
+                **{name: getattr(incident, name) for name in Incident.model_fields},
                 "status": IncidentStatus.RESOLVED,
                 "state_at_resolution": ResourceState.RECOVERED,
                 "resolved_at": recovery_end_time,
@@ -438,6 +466,7 @@ def handler(event: dict, context: Any) -> dict:
         new_attempts = len(new_actions)
         recovery_initiated_at = incident.recovery_initiated_at or recovery_start_time
 
+        failure_duration = (recovery_end_time - incident.detected_at).total_seconds()
         incident_updates: dict[str, Any] = {
             "recovery_actions": new_actions,
             "recovery_attempts": new_attempts,
@@ -447,9 +476,11 @@ def handler(event: dict, context: Any) -> dict:
             "recovery_action": strategy_type.value,
             "recovery_result": "FAILED",
             "error_message": str(exc)[:2000],
+            "duration_seconds": max(0.0, failure_duration),
         }
 
-        if new_attempts < MAX_RECOVERY_ATTEMPTS:
+        retryable = new_attempts < MAX_RECOVERY_ATTEMPTS
+        if retryable:
             # Retry is still available — resource enters RECOVERY_FAILED
             final_state = ResourceState.RECOVERY_FAILED
             incident_updates["status"] = IncidentStatus.RECOVERING
@@ -460,7 +491,8 @@ def handler(event: dict, context: Any) -> dict:
                 extra={"resource_id": resource_id},
             )
         else:
-            # Max attempts exhausted — escalate
+            # Max attempts exhausted — escalate. This is terminal, so the
+            # invocation should be acknowledged rather than retried.
             final_state = ResourceState.MANUAL_INTERVENTION_REQUIRED
             incident_updates["status"] = IncidentStatus.ESCALATED
             incident_updates["escalated_at"] = recovery_end_time
@@ -473,7 +505,12 @@ def handler(event: dict, context: Any) -> dict:
 
         resource_repo.update_state(resource_id, final_state)
 
-        failed_incident = incident.model_copy(update=incident_updates)
+        failed_incident = Incident.model_validate(
+            {
+                **{name: getattr(incident, name) for name in Incident.model_fields},
+                **incident_updates,
+            }
+        )
 
         # SNS recovery failed notification (with duplicate guard)
         failed_incident, _ = notification_svc.notify_recovery_failed(
@@ -488,4 +525,19 @@ def handler(event: dict, context: Any) -> dict:
         else:
             incident_repo.update(failed_incident)
 
-        return {"statusCode": 500, "body": f"Recovery failed after {new_attempts} attempt(s)"}
+        if retryable:
+            # Returning a non-exception would mark the invocation successful,
+            # so Lambda would never retry. Raising lets the retry policy pick
+            # the event up from RECOVERY_FAILED.
+            raise RuntimeError(
+                f"Recovery failed after {new_attempts} attempt(s); retry scheduled"
+            ) from exc
+
+        return {
+            "statusCode": 200,
+            "body": (
+                f"Recovery failed after {new_attempts} attempt(s); "
+                "escalated to MANUAL_INTERVENTION_REQUIRED"
+            ),
+        }
+

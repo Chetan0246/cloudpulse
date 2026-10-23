@@ -34,7 +34,8 @@ REGION="${AWS_REGION:-ap-south-1}"
 NOTIFICATION_EMAIL="${NOTIFICATION_EMAIL:-}"
 PUBLIC_FRONTEND=false
 CORS_ORIGIN=""
-EXECUTION_MODE="HYBRID"
+EXECUTION_MODE="SIMULATION"
+REAL_AWS_ALLOWLIST="${REAL_AWS_ALLOWLIST:-}"
 GUIDED=false
 DRY_RUN=false
 
@@ -70,6 +71,10 @@ while [[ $# -gt 0 ]]; do
       EXECUTION_MODE="$2"
       shift 2
       ;;
+    -a|--real-aws-allowlist)
+      REAL_AWS_ALLOWLIST="$2"
+      shift 2
+      ;;
     -g|--guided)
       GUIDED=true
       shift
@@ -89,7 +94,8 @@ Options:
   -m, --email <email>        Notification email for SNS topic alerts. Default: ""
   -p, --public-frontend      Enable public S3 static website hosting for frontend
   -c, --cors-origin <origin> Allowed CORS origin (e.g. '*' or S3 URL). Default: http://localhost:5173
-  -x, --execution-mode <mode> Self-healing execution mode (HYBRID, REAL_AWS, SIMULATION). Default: HYBRID
+  -x, --execution-mode <mode> Self-healing execution mode (SIMULATION, HYBRID, REAL_AWS). Default: SIMULATION
+  -a, --real-aws-allowlist <ids> Comma-separated resource IDs permitted in HYBRID/REAL_AWS mode
   -g, --guided               Run SAM deploy in interactive guided mode
   -d, --dry-run              Validate and build SAM artifacts without deploying
   -h, --help                 Show this help message
@@ -199,7 +205,7 @@ if [[ "${GUIDED}" = true ]]; then
     --region "${REGION}" \
     --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
 else
-  PARAM_OVERRIDES="Environment=${ENV} ExecutionMode=${EXECUTION_MODE}"
+  PARAM_OVERRIDES="Environment=${ENV} ExecutionMode=${EXECUTION_MODE} RealAwsAllowlist=${REAL_AWS_ALLOWLIST}"
   if [[ -n "${NOTIFICATION_EMAIL}" ]]; then
     PARAM_OVERRIDES="${PARAM_OVERRIDES} NotificationEmail=${NOTIFICATION_EMAIL}"
   fi

@@ -67,7 +67,7 @@ reset-resources:
 	cd backend && .venv/bin/python ../scripts/reset_resources.py
 
 clean:
-	rm -rf .aws-sam infrastructure/sam/.aws-sam
+	rm -rf .aws-sam
 	rm -rf frontend/dist
 	rm -rf backend/.venv
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

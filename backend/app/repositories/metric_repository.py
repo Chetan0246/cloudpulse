@@ -88,8 +88,15 @@ class MetricRepository:
                 )
                 raw_items = response.get("Items", [])
             else:
-                response = self.table.scan()
-                raw_items = response.get("Items", [])
+                raw_items = []
+                scan_kwargs: dict[str, Any] = {}
+                while True:
+                    response = self.table.scan(**scan_kwargs)
+                    raw_items.extend(response.get("Items", []))
+                    last_key = response.get("LastEvaluatedKey")
+                    if not last_key:
+                        break
+                    scan_kwargs["ExclusiveStartKey"] = last_key
                 if window_type:
                     raw_items = [i for i in raw_items if i.get("window_type") == window_type.value]
                 raw_items.sort(key=lambda x: x.get("computed_at", ""), reverse=True)

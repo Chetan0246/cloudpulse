@@ -30,7 +30,7 @@ from app.models.reliability_metric import (
     MetricWindowType,
     ReliabilityMetricSummary,
 )
-from app.models.resource import HealthStatus, ResourceState, SimulatedResource
+from app.models.resource import ResourceState, SimulatedResource
 
 
 def _ensure_utc(dt: datetime | None) -> datetime | None:
@@ -40,6 +40,61 @@ def _ensure_utc(dt: datetime | None) -> datetime | None:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=UTC)
     return dt.astimezone(UTC)
+
+
+def _filter_by_window(
+    incidents: Sequence[Incident],
+    window_start: datetime | None,
+    window_end: datetime | None,
+) -> list[Incident]:
+    """
+    Return only incidents whose detection time falls inside the window.
+
+    A window with either bound missing is treated as unbounded on that side.
+    """
+    w_start = _ensure_utc(window_start)
+    w_end = _ensure_utc(window_end)
+    if w_start is None and w_end is None:
+        return list(incidents)
+
+    filtered: list[Incident] = []
+    for incident in incidents:
+        detected = _ensure_utc(incident.detected_at)
+        if detected is None:
+            continue
+        if w_start is not None and detected < w_start:
+            continue
+        if w_end is not None and detected > w_end:
+            continue
+        filtered.append(incident)
+    return filtered
+
+
+def _overlap_seconds(
+    start: datetime | None,
+    end: datetime | None,
+    window_start: datetime,
+    window_end: datetime,
+) -> float:
+    """Seconds of [start, end] that fall inside [window_start, window_end]."""
+    s = _ensure_utc(start)
+    e = _ensure_utc(end)
+    if s is None or e is None or e <= s:
+        return 0.0
+    overlap_start = max(s, window_start)
+    overlap_end = min(e, window_end)
+    if overlap_end <= overlap_start:
+        return 0.0
+    return (overlap_end - overlap_start).total_seconds()
+
+
+def calculate_failure_type_counts(incidents: Sequence[Incident]) -> dict[str, int]:
+    """Count incidents per FailureType value within the supplied set."""
+    counts: dict[str, int] = {}
+    for incident in incidents:
+        key = incident.failure_type.value
+        counts[key] = counts.get(key, 0) + 1
+    return counts
 
 
 def calculate_incident_count(incidents: Sequence[Incident]) -> int:
@@ -221,16 +276,19 @@ def calculate_incident_frequency(
     Returns:
         Tuple of (frequency_per_hour, frequency_per_day, mtbf_seconds).
     """
+    # Callers normally pass an already window-scoped sequence. Re-filtering
+    # here would drop incidents detected a few microseconds after `window_end`
+    # (common when callers capture `now` before constructing records).
     count = len(incidents)
 
     if window_start and window_end:
         w_start = _ensure_utc(window_start)
         w_end = _ensure_utc(window_end)
-        span_seconds = max(3600.0, (w_end - w_start).total_seconds()) if w_start and w_end else 86400.0
+        span_seconds = max(60.0, (w_end - w_start).total_seconds()) if w_start and w_end else 86400.0
     elif count > 0:
         earliest = min(_ensure_utc(i.created_at) or datetime.now(UTC) for i in incidents)
         latest = max(_ensure_utc(i.resolved_at or i.detected_at) or datetime.now(UTC) for i in incidents)
-        span_seconds = max(3600.0, (latest - earliest).total_seconds())
+        span_seconds = max(60.0, (latest - earliest).total_seconds())
     else:
         span_seconds = 86400.0
 
@@ -329,29 +387,52 @@ def calculate_resource_metric_summary(
 ) -> ReliabilityMetricSummary:
     """Compute ReliabilityMetricSummary for a single resource."""
     now = datetime.now(UTC)
-    w_start = window_start or (now - timedelta(days=1))
     w_end = window_end or now
 
     res_incidents = [i for i in incidents if i.resource_id.upper() == resource_id.upper()]
-    total_inc = calculate_incident_count(res_incidents)
-    resolved_inc = sum(1 for i in res_incidents if i.status == IncidentStatus.RESOLVED)
-    failed_inc = sum(1 for i in res_incidents if i.status == IncidentStatus.ESCALATED)
 
-    succ_rate = calculate_recovery_success_rate(res_incidents)
-    fail_rate = calculate_recovery_failure_rate(res_incidents)
-    avg_rec = calculate_average_recovery_time(res_incidents)
-    mttr = calculate_mttr(res_incidents)
-    avg_det = calculate_average_detection_time(res_incidents)
-    freq_hr, freq_day, mtbf = calculate_incident_frequency(res_incidents, w_start, w_end)
+    if window_type == MetricWindowType.CUMULATIVE:
+        # "All time" truly means all incidents, not an arbitrary 30-day slice.
+        window_incidents = list(res_incidents)
+        detected_times = [
+            _ensure_utc(i.detected_at) for i in res_incidents if i.detected_at is not None
+        ]
+        w_start = min(
+            (d for d in detected_times if d is not None),
+            default=window_start or (w_end - timedelta(days=1)),
+        )
+    else:
+        w_start = window_start or (w_end - timedelta(days=1))
+        window_incidents = _filter_by_window(res_incidents, w_start, w_end)
 
-    # Availability calculation
+    if w_start > w_end:
+        w_start = w_end - timedelta(days=1)
+
+    total_inc = calculate_incident_count(window_incidents)
+    resolved_inc = sum(1 for i in window_incidents if i.status == IncidentStatus.RESOLVED)
+    failed_inc = sum(1 for i in window_incidents if i.status == IncidentStatus.ESCALATED)
+
+    succ_rate = calculate_recovery_success_rate(window_incidents)
+    fail_rate = calculate_recovery_failure_rate(window_incidents)
+    avg_rec = calculate_average_recovery_time(window_incidents)
+    mttr = calculate_mttr(window_incidents)
+    avg_det = calculate_average_detection_time(window_incidents)
+    freq_hr, freq_day, mtbf = calculate_incident_frequency(window_incidents, w_start, w_end)
+
+    # Availability: only the portion of each outage that overlaps this window
+    # counts. Unresolved outages are assumed to still be down at window_end.
     total_window_sec = max(1.0, (w_end - w_start).total_seconds())
-    downtime_sec = sum(
-        float(i.duration_seconds or 0.0)
-        for i in res_incidents
-        if i.status == IncidentStatus.RESOLVED
+    downtime_sec = 0.0
+    for inc in window_incidents:
+        if inc.status == IncidentStatus.RESOLVED:
+            outage_end = inc.resolved_at or inc.recovered_at
+        else:
+            outage_end = w_end
+        downtime_sec += _overlap_seconds(inc.detected_at, outage_end, w_start, w_end)
+
+    availability = round(
+        max(0.0, min(100.0, (1.0 - (downtime_sec / total_window_sec)) * 100.0)), 3
     )
-    availability = round(max(0.0, min(100.0, (1.0 - (downtime_sec / total_window_sec)) * 100.0)), 3)
 
     return ReliabilityMetricSummary(
         resource_id=resource_id.upper(),
@@ -366,6 +447,7 @@ def calculate_resource_metric_summary(
         mtbf_seconds=mtbf,
         availability_pct=availability,
         computed_at=now,
+        failure_type_counts=calculate_failure_type_counts(window_incidents),
         recovery_success_rate_pct=succ_rate,
         recovery_failure_rate_pct=fail_rate,
         avg_recovery_time_seconds=avg_rec,
@@ -380,17 +462,41 @@ def calculate_fleet_reliability_overview(
     resources: Sequence[SimulatedResource],
     window_start: datetime | None = None,
     window_end: datetime | None = None,
+    window_type: MetricWindowType = MetricWindowType.DAILY,
 ) -> FleetReliabilityOverview:
     """
     Produce the comprehensive 8-metric observability & reliability report.
+
+    Every incident-derived metric is scoped to the requested window. Health
+    distribution is a point-in-time snapshot and therefore covers the fleet
+    passed by the caller.
     """
-    inc_count = calculate_incident_count(incidents)
-    succ_rate = calculate_recovery_success_rate(incidents)
-    fail_rate = calculate_recovery_failure_rate(incidents)
-    avg_rec = calculate_average_recovery_time(incidents)
-    mttr = calculate_mttr(incidents)
-    avg_det = calculate_average_detection_time(incidents)
-    freq_hr, freq_day, mtbf = calculate_incident_frequency(incidents, window_start, window_end)
+    now = datetime.now(UTC)
+    w_end = window_end or now
+
+    if window_type == MetricWindowType.CUMULATIVE:
+        window_incidents = list(incidents)
+        detected_times = [
+            _ensure_utc(i.detected_at) for i in incidents if i.detected_at is not None
+        ]
+        w_start = min(
+            (d for d in detected_times if d is not None),
+            default=window_start or (w_end - timedelta(days=1)),
+        )
+    else:
+        w_start = window_start or (w_end - timedelta(days=1))
+        window_incidents = _filter_by_window(incidents, w_start, w_end)
+
+    if w_start > w_end:
+        w_start = w_end - timedelta(days=1)
+
+    inc_count = calculate_incident_count(window_incidents)
+    succ_rate = calculate_recovery_success_rate(window_incidents)
+    fail_rate = calculate_recovery_failure_rate(window_incidents)
+    avg_rec = calculate_average_recovery_time(window_incidents)
+    mttr = calculate_mttr(window_incidents)
+    avg_det = calculate_average_detection_time(window_incidents)
+    freq_hr, freq_day, mtbf = calculate_incident_frequency(window_incidents, w_start, w_end)
     health_dist = calculate_health_distribution(resources)
 
     # Per-resource summaries
@@ -400,9 +506,9 @@ def calculate_fleet_reliability_overview(
             calculate_resource_metric_summary(
                 resource_id=r.resource_id,
                 incidents=incidents,
-                window_type=MetricWindowType.DAILY,
-                window_start=window_start,
-                window_end=window_end,
+                window_type=window_type,
+                window_start=w_start,
+                window_end=w_end,
             )
         )
 

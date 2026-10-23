@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { FailureType, IncidentSeverity, SimulateResponse } from './types';
+import type { FailureType, IncidentSeverity, SimulateResponse, SimulateResetResponse } from './types';
 
 export const simulateApi = {
   inject: (
@@ -31,13 +31,13 @@ export const simulateApi = {
       })
       .then((r) => (r as any).data || r),
 
-  reset: (resourceId: string): Promise<SimulateResponse> =>
+  reset: (resourceId: string): Promise<SimulateResetResponse> =>
     apiClient
-      .post<SimulateResponse>(`/simulate/reset/${resourceId}`)
+      .post<SimulateResetResponse>(`/simulate/reset/${resourceId}`)
       .then((r) => r.data),
 
-  recover: (resourceId: string): Promise<SimulateResponse> =>
+  recover: (resourceId: string): Promise<SimulateResetResponse> =>
     apiClient
-      .post<SimulateResponse>('/simulate/recover', { resource_id: resourceId })
+      .post<SimulateResetResponse>('/simulate/recover', { resource_id: resourceId })
       .then((r) => r.data),
 };

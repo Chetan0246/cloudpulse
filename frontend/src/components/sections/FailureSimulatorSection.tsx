@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import type { FailureType, IncidentSeverity, ResourceSummary } from '../../api/types';
-import { simulateApi } from '../../api/simulate';
 import { Panel } from '../common/Card';
 import { StateBadge, SeverityBadge } from '../common/Badge';
 
@@ -245,15 +244,14 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
       recordStageTime('RECOVERY');
       addSreLog(
         'RECOVERY',
-        'LAMBDA',
-        `Recovery Lambda executing strategy: ${selectedScenario.recoveryStrategy.split('—')[0]}. State: RECOVERING.`
+        'MANUAL',
+        `Requesting manual remediation for ${resourceId}. State: RECOVERING.`
       );
 
       // Simulate recovery processing delay (800ms)
       await new Promise((resolve) => setTimeout(resolve, 800));
 
-      // Call backend recover/reset API
-      await simulateApi.recover(resourceId);
+      // A single reset call drives the backend state machine and refetch.
       await onResetResource(resourceId);
 
       // 5. Recovered: Success & nominal metrics restored
@@ -263,11 +261,6 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
         'RECOVERED',
         'REMEDIATION',
         `Remediation complete. Metric targets normalized. State: RECOVERED. Incident marked RESOLVED.`
-      );
-      addSreLog(
-        'RECOVERED',
-        'SNS',
-        `Dispatched SNS recovery confirmation alert to on-call reliability engineers.`
       );
     } catch (err: any) {
       const msg = err.response?.data?.detail || err.message || 'Failed to execute recovery';

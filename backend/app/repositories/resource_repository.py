@@ -62,8 +62,15 @@ class ResourceRepository:
         size (≤20 virtual resources).
         """
         try:
-            response = self.table.scan()
-            items = response.get("Items", [])
+            items: list[dict[str, Any]] = []
+            scan_kwargs: dict[str, Any] = {}
+            while True:
+                response = self.table.scan(**scan_kwargs)
+                items.extend(response.get("Items", []))
+                last_key = response.get("LastEvaluatedKey")
+                if not last_key:
+                    break
+                scan_kwargs["ExclusiveStartKey"] = last_key
             return [SimulatedResource.from_dynamodb_item(item) for item in items]
         except ClientError as e:
             logger.error("DynamoDB scan error on resources table: %s", e)
@@ -98,13 +105,18 @@ class ResourceRepository:
         resource_id: str,
         new_state: ResourceState,
         condition_state: ResourceState | None = None,
+        condition_states: set[ResourceState] | None = None,
     ) -> SimulatedResource:
         """
         Conditionally update resource state in DynamoDB.
 
-        If condition_state is provided, the update only succeeds if the
-        current state matches — providing idempotency and preventing
-        duplicate recovery actions.
+        If ``condition_state`` (or any state in ``condition_states``) is
+        provided, the update only succeeds if the current state matches —
+        providing idempotency and preventing duplicate recovery actions.
+
+        ``condition_states`` exists so the recovery Lambda can accept a retry
+        from either FAILURE_DETECTED or RECOVERY_FAILED with a single atomic
+        conditional write.
 
         Returns:
             The updated SimulatedResource.
@@ -122,9 +134,18 @@ class ResourceRepository:
             },
             "ReturnValues": "ALL_NEW",
         }
+        allowed_states = set(condition_states or ())
         if condition_state is not None:
-            update_kwargs["ConditionExpression"] = "current_state = :cs"
-            update_kwargs["ExpressionAttributeValues"][":cs"] = condition_state.value
+            allowed_states.add(condition_state)
+        if allowed_states:
+            placeholders: list[str] = []
+            for index, state in enumerate(sorted(allowed_states, key=lambda s: s.value)):
+                placeholder = f":cs{index}"
+                placeholders.append(placeholder)
+                update_kwargs["ExpressionAttributeValues"][placeholder] = state.value
+            update_kwargs["ConditionExpression"] = (
+                f"current_state IN ({', '.join(placeholders)})"
+            )
 
         try:
             response = self.table.update_item(**update_kwargs)

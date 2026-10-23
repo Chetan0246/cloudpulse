@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from dataclasses import dataclass
 
 import boto3
@@ -15,8 +16,29 @@ class RecoveryStrategyError(Exception):
 
 MAX_RECOVERY_ATTEMPTS = 3
 
-EXECUTION_MODE = os.environ.get("EXECUTION_MODE", "HYBRID").upper()
+# Simulated execution is the safe default. Any real-AWS behaviour must be
+# explicitly opted into per-resource via REAL_AWS_ALLOWLIST; there is no
+# "real mode by accident".
+_VALID_EXECUTION_MODES = {"SIMULATION", "HYBRID", "REAL_AWS"}
+_configured_mode = os.environ.get("EXECUTION_MODE", "SIMULATION").upper()
+EXECUTION_MODE = (
+    _configured_mode if _configured_mode in _VALID_EXECUTION_MODES else "SIMULATION"
+)
+if _configured_mode not in _VALID_EXECUTION_MODES:
+    logger.warning(
+        "Unrecognised EXECUTION_MODE=%r; falling back to SIMULATION", _configured_mode
+    )
+
 AWS_REGION = os.environ.get("AWS_REGION_NAME", os.environ.get("AWS_REGION", "ap-south-1"))
+
+# Comma-separated resource IDs that may be touched with real AWS APIs.
+REAL_AWS_ALLOWLIST = {
+    item.strip().upper()
+    for item in os.environ.get("REAL_AWS_ALLOWLIST", "").split(",")
+    if item.strip()
+}
+
+_EC2_INSTANCE_ID = re.compile(r"^i-[0-9a-f]{8,17}$", re.IGNORECASE)
 
 @dataclass
 class RecoveryStrategy:
@@ -48,7 +70,7 @@ class RecoveryStrategy:
         # 2. In HYBRID or REAL_AWS mode, trigger real AWS SDK remediation
         real_outcome = self._execute_real_aws_action(resource_id)
         outcome_description = real_outcome if real_outcome else self.description
-        
+
         return (outcome_description, metrics_delta)
 
     def _execute_real_aws_action(self, resource_id: str) -> str | None:
@@ -60,11 +82,20 @@ class RecoveryStrategy:
         if EXECUTION_MODE == "SIMULATION":
             return None
 
+        # Hard safety gate: even in HYBRID/REAL_AWS mode, only resources the
+        # operator explicitly allow-listed may receive real API calls.
         rid = resource_id.strip()
+        if rid.upper() not in REAL_AWS_ALLOWLIST:
+            logger.info(
+                "Resource '%s' is not in REAL_AWS_ALLOWLIST; using simulation only",
+                rid,
+            )
+            return None
+
         rid_lower = rid.lower()
-        is_ec2_instance = rid_lower.startswith("i-")
-        is_asg = rid_lower.startswith("asg-") or "asg" in rid_lower
-        is_rds = rid_lower.startswith("db-") or "rds" in rid_lower
+        is_ec2_instance = bool(_EC2_INSTANCE_ID.fullmatch(rid))
+        is_asg = rid_lower.startswith(("asg-", "asg_", "asg:"))
+        is_rds = rid_lower.startswith(("db-", "rds-", "rds_", "rds:"))
 
         try:
             if self.recovery_action_type == RecoveryActionType.SCALE_OUT:
@@ -90,16 +121,24 @@ class RecoveryStrategy:
                 return f"Real AWS Action: Verified live EC2 instance health in {AWS_REGION}; service restarted on {rid}."
 
             elif self.recovery_action_type == RecoveryActionType.STORAGE_CLEANUP:
+                # Read-only diagnostics only. Destructive shell commands must
+                # never be dispatched by a demo recovery strategy.
                 ssm = boto3.client("ssm", region_name=AWS_REGION)
                 if is_ec2_instance:
                     res = ssm.send_command(
                         InstanceIds=[rid],
                         DocumentName="AWS-RunShellScript",
-                        Parameters={"commands": ["find /tmp -type f -atime +2 -delete", "journalctl --vacuum-time=1d"]},
+                        Parameters={
+                            "commands": [
+                                "df -h",
+                                "du -sh /tmp /var/log 2>/dev/null || true",
+                                "journalctl --disk-usage || true",
+                            ]
+                        },
                         TimeoutSeconds=60,
                     )
                     cmd_id = res.get("Command", {}).get("CommandId", "N/A")
-                    return f"Real AWS Action: Sent SSM Run Command ({cmd_id}) for storage cleanup on '{rid}'."
+                    return f"Real AWS Action: Sent SSM storage diagnostics ({cmd_id}) for '{rid}'."
                 return f"Real AWS Action: Automated storage volume optimization executed in {AWS_REGION}."
 
             elif self.recovery_action_type == RecoveryActionType.FAILOVER:
@@ -156,8 +195,8 @@ def dispatch_strategy(failure_type: FailureType) -> RecoveryStrategy:
             simulated_duration_seconds=6.0,
         ),
     }
-    
+
     if failure_type not in strategies:
         raise RecoveryStrategyError(f"No strategy for failure type {failure_type}")
-        
+
     return strategies[failure_type]

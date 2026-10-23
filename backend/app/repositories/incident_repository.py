@@ -70,8 +70,15 @@ class IncidentRepository:
         For the academic dataset (< 200 incidents) the Scan cost is negligible.
         """
         try:
-            response = self.table.scan()
-            raw_items = response.get("Items", [])
+            raw_items: list[dict[str, Any]] = []
+            scan_kwargs: dict[str, Any] = {}
+            while True:
+                response = self.table.scan(**scan_kwargs)
+                raw_items.extend(response.get("Items", []))
+                last_key = response.get("LastEvaluatedKey")
+                if not last_key:
+                    break
+                scan_kwargs["ExclusiveStartKey"] = last_key
         except ClientError as e:
             logger.error("DynamoDB scan error on incidents table: %s", e)
             raise DatabaseError(f"Failed to list incidents: {e}") from e

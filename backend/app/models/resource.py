@@ -83,8 +83,12 @@ class ResourceState(str, Enum):
 
     def can_transition_to(self, target: ResourceState) -> bool:
         """Check whether a state transition is allowed."""
+        # Manual reset via /simulate/reset is an operator escape hatch and is
+        # allowed from every non-terminal state; the automated recovery path
+        # uses the narrower transitions in the middle of the table.
         allowed: dict[ResourceState, set[ResourceState]] = {
             ResourceState.HEALTHY: {
+                ResourceState.HEALTHY,  # Idempotent manual reset
                 ResourceState.WARNING,
                 ResourceState.FAILURE_DETECTED,  # Direct injection bypass
             },
@@ -94,23 +98,29 @@ class ResourceState(str, Enum):
             },
             ResourceState.FAILURE_DETECTED: {
                 ResourceState.RECOVERY_INITIATED,
+                ResourceState.HEALTHY,  # Manual reset via API
             },
             ResourceState.RECOVERY_INITIATED: {
                 ResourceState.RECOVERY_IN_PROGRESS,
                 ResourceState.RECOVERY_FAILED,
+                ResourceState.HEALTHY,  # Manual reset via API
             },
             ResourceState.RECOVERY_IN_PROGRESS: {
                 ResourceState.RECOVERED,
                 ResourceState.RECOVERY_FAILED,
+                ResourceState.HEALTHY,  # Manual reset via API
             },
             ResourceState.RECOVERED: {
                 ResourceState.HEALTHY,
+                ResourceState.FAILURE_DETECTED,  # Re-injection after recovery
             },
             ResourceState.RECOVERY_FAILED: {
                 ResourceState.MANUAL_INTERVENTION_REQUIRED,
                 ResourceState.RECOVERY_INITIATED,  # Retry allowed
+                ResourceState.HEALTHY,  # Manual reset via API
             },
             ResourceState.MANUAL_INTERVENTION_REQUIRED: {
+                ResourceState.RECOVERY_INITIATED,  # Operator-triggered retry
                 ResourceState.HEALTHY,  # Manual reset via API
             },
         }
