@@ -20,6 +20,8 @@ jobs:
         working-directory: backend
         run: python -m pip install -r requirements-dev.txt
       - name: Run backend tests
+        env:
+          PYTHONPATH: backend:.
         run: python -m pytest tests/ backend/tests/ -q
 
   frontend:

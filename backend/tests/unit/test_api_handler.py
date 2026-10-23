@@ -28,6 +28,7 @@ _HANDLER_PATH = pathlib.Path(__file__).parents[3] / "lambda" / "api" / "handler.
 
 
 def _load_api_handler():
+    pytest.importorskip("mangum")
     spec = importlib.util.spec_from_file_location("api_handler", _HANDLER_PATH)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
