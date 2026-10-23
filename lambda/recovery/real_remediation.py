@@ -125,7 +125,10 @@ def execute_real_remediation(
     if failure == "NETWORK_LATENCY":
         rule_arn = _required("REAL_ALB_LISTENER_RULE_ARN")
         target_group_arn = _required("REAL_ALTERNATE_TARGET_GROUP_ARN")
-        if not _healthy(client, target_group_arn, instance_id):
+        alternate_instance_id = _required("REAL_ALTERNATE_INSTANCE_ID")
+        if alternate_instance_id == instance_id:
+            raise RealRemediationError("Alternate target must be different from the primary instance")
+        if not _healthy(client, target_group_arn, alternate_instance_id):
             raise RealRemediationError("Configured alternate target is not healthy")
         rules = client.describe_rules(RuleArns=[rule_arn]).get("Rules", [])
         if len(rules) != 1 or rules[0].get("RuleArn") != rule_arn:
