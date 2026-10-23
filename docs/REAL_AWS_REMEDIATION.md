@@ -11,11 +11,11 @@ The connected GitHub repository inspection does not provide AWS account access, 
 A single standalone EC2 instance cannot safely perform all five actions. The real path requires:
 - One dedicated, SSM-managed EC2 primary, running cloudpulse-demo.service; install SSM Agent and attach AmazonSSMManagedInstanceCore to its instance profile.
 - A dedicated Auto Scaling group containing the demo compute, with a deliberately bounded MaxSize, to provide scale-out capacity.
-- An ALB listener rule and healthy alternate target group for reroute.
+- An ALB listener rule and alternate target group containing a distinct healthy EC2 target for reroute. The same standby instance may serve as the alternate if registered and healthy in both target groups.
 - A target group with both the primary and healthy standby registered for failover.
 - Network connectivity from the Recovery Lambda to AWS APIs through normal AWS service endpoints; the EC2 instance must be reachable by Systems Manager.
 
-The adapter only uses deployment parameters for AWS resource IDs and ARNs. It does not treat EventBridge detail, API body, or simulator resource data as a target or command source. Because an allowed failure event can trigger an action against the one configured target, require authenticated operator access to failure injection and restrict API access before enabling real mode.
+The adapter only uses deployment parameters for AWS resource IDs and ARNs. It does not treat EventBridge detail, API body, or simulator resource data as a target or command source. Because an allowed failure event can trigger an action against the one configured target, require authenticated operator access to failure injection and restrict API access before enabling real mode. The current SAM HTTP API template does not configure an authorizer, so do not set RealRemediationEnabled=true while the API is publicly reachable until authentication or private operator-only access has been added and verified.
 
 ## Five real action mappings
 
@@ -27,7 +27,7 @@ The adapter only uses deployment parameters for AWS resource IDs and ARNs. It do
 | NETWORK_LATENCY | Change one configured ALB listener rule to forward to the configured alternate target group | Requires the configured EC2 target to report healthy in that target group |
 | SERVICE_DOWNTIME | Deregister the configured primary from the configured failover target group | Requires a distinct configured standby to be healthy in the same target group first |
 
-The CloudPulse virtual resource and incident records remain the control-plane/audit representation and retain simulated metric reset values for the dashboard. The recovery action outcome records the real AWS result when the event's resource ID exactly matches RealAllowedResourceId. Other virtual resource IDs continue down the simulator path even when the feature flag is on.
+The CloudPulse virtual resource and incident records remain the control-plane/audit representation and retain simulated metric reset values for the dashboard. The recovery action outcome records the real AWS result when the event's resource ID exactly matches RealAllowedResourceId. Other virtual resource IDs continue down the simulator path even when the feature flag is on. Current CloudWatch alarms still consume the project's CloudPulse synthetic metrics; the real adapter executes AWS actions but does not add real EC2 telemetry collection. For autonomous remediation based on actual EC2 health, first configure CloudWatch Agent or another trusted telemetry source and align alarm namespace/dimensions with the allowlisted resource.
 
 ## Deployment and opt-in
 
@@ -58,6 +58,7 @@ sam deploy --stack-name cloudpulse-dev \
     RealAsgName=REPLACE_WITH_DEDICATED_ASG \
     RealAlbListenerRuleArn=arn:aws:elasticloadbalancing:REGION:ACCOUNT:listener-rule/app/REPLACE/REPLACE/REPLACE \
     RealAlternateTargetGroupArn=arn:aws:elasticloadbalancing:REGION:ACCOUNT:targetgroup/REPLACE/REPLACE \
+    RealAlternateInstanceId=i-REPLACE_WITH_HEALTHY_ALTERNATE \
     RealFailoverTargetGroupArn=arn:aws:elasticloadbalancing:REGION:ACCOUNT:targetgroup/REPLACE/REPLACE \
     RealStandbyInstanceId=i-REPLACE_WITH_HEALTHY_STANDBY
 ~~~
