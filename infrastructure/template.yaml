@@ -36,6 +36,7 @@ Globals:
         SNS_TOPIC_ARN: !Ref NotificationsTopic
         AWS_REGION_NAME: !Ref AWS::Region
         LOG_LEVEL: !Ref LogLevel
+        EXECUTION_MODE: !Ref ExecutionMode
     Tags:
       Project: CloudPulse
       Course: BCSE355L
@@ -81,6 +82,18 @@ Parameters:
       - WARNING
       - ERROR
     Description: Application logging verbosity.
+
+  ExecutionMode:
+    Type: String
+    Default: HYBRID
+    AllowedValues:
+      - HYBRID
+      - REAL_AWS
+      - SIMULATION
+    Description: >
+      Self-healing execution mode. HYBRID mode detects target resource IDs
+      and executes real AWS SDK actions (EC2 reboot, AutoScaling, SSM, RDS failover)
+      when real cloud resources are targeted, while maintaining simulated fallback.
 
   EnablePublicFrontendBucket:
     Type: String
@@ -862,6 +875,25 @@ Resources:
                 Action:
                   - sqs:SendMessage
                 Resource: !GetAtt RecoveryDLQ.Arn
+        - PolicyName: RecoveryRealAwsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - autoscaling:SetDesiredCapacity
+                  - autoscaling:DescribeAutoScalingGroups
+                  - ec2:DescribeInstances
+                  - ec2:RebootInstances
+                  - ec2:StartInstances
+                  - ec2:StopInstances
+                  - ec2:DescribeRouteTables
+                  - ssm:SendCommand
+                  - ssm:GetCommandInvocation
+                  - ssm:DescribeInstanceInformation
+                  - rds:DescribeDBInstances
+                  - rds:RebootDBInstance
+                Resource: "*"
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Outputs
