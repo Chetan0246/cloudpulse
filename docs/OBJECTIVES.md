@@ -81,5 +81,5 @@ Define 100% of AWS infrastructure (Lambda, DynamoDB, API Gateway, EventBridge, C
 | **PO-7** | React dashboard builds and renders 9 sections | Vitest suite (49 tests) + TypeScript build (`tsc --noEmit`) | ✅ Verified |
 | **EO-1** | Zero real AWS resources modified | Security audit (`SECURITY.md`) + IAM policy inspection | ✅ Verified |
 | **EO-2** | Duplicate events safely ignored without error | Idempotency tests (`test_edge_cases_and_resilience.py`) | ✅ Verified |
-| **EO-3** | Backend test suite passes completely | Pytest run (372 passed) | ✅ Verified |
+| **EO-3** | Backend test suite passes completely | Pytest run (373 passed) | ✅ Verified |
 | **EO-4** | SAM template validated and cost bounded | Cost management audit (`COST_MANAGEMENT.md`) | ✅ Verified |

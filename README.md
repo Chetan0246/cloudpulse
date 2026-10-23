@@ -6,7 +6,7 @@
 
 > **Course:** BCSE355L – Cloud Architecture Design | Fall 2026-2027  
 > **Milestone:** Project Review 2 (Release Candidate)  
-> **Verification:** 372 Backend Tests (100% Pass) | 49 Frontend Tests (100% Pass) | 0 Lint/Build Errors  
+> **Verification:** 373 Backend Tests (100% Pass) | 49 Frontend Tests (100% Pass) | 0 Lint/Build Errors  
 > **Repository:** [github.com/Chetan0246/cloudpulse](https://github.com/Chetan0246/cloudpulse)
 
 ## How to run
@@ -141,7 +141,7 @@ For live evaluation and Review 2 defense, follow the 11-stage closed-loop demo:
 ### Academic Review 2 Package
 - [docs/REVIEW_2/architecture-summary.md](./docs/REVIEW_2/architecture-summary.md) — Compact architecture briefing for evaluators
 - [docs/REVIEW_2/demo-checklist.md](./docs/REVIEW_2/demo-checklist.md) — Step-by-step presentation script for the 11-stage demo
-- [docs/REVIEW_2/test-results-template.md](./docs/REVIEW_2/test-results-template.md) — Verified 421-test execution report
+- [docs/REVIEW_2/test-results-template.md](./docs/REVIEW_2/test-results-template.md) — Verified 422-test execution report
 - [docs/REVIEW_2/likely-viva-questions.md](./docs/REVIEW_2/likely-viva-questions.md) — Comprehensive technical viva questions and model answers
 
 ---
@@ -151,9 +151,9 @@ For live evaluation and Review 2 defense, follow the 11-stage closed-loop demo:
 CloudPulse enforces 100% deterministic test execution using `pytest`, `moto` (in-memory AWS mocking), and `vitest`:
 
 ```bash
-# 1. Run full backend suite (372 tests across both suites)
+# 1. Run full backend suite (373 tests across both suites)
 PYTHONPATH=backend:. backend/.venv/bin/python -m pytest tests/ backend/tests/ -q
-# Result: 372 passed (100% pass)
+# Result: 373 passed (100% pass)
 
 # 2. Run frontend component & lifecycle suite (49 tests)
 cd frontend && npm test -- --run

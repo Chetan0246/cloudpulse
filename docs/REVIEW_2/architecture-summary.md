@@ -183,7 +183,7 @@ Computed strictly from primary DynamoDB records (Zero-Invention Principle):
 - Adaptive polling: 3s during active incidents, 10s nominal, 30s background.
 
 ### Test Execution Results
-- **Backend Tests:** **372 passed** (0 failures, 0 regressions).
+- **Backend Tests:** **373 passed** (0 failures, 0 regressions).
 - **Frontend Tests:** **49 passed** (0 failures).
 - **Static Analysis:** TypeScript compilation (`tsc --noEmit`) passes with 0 errors.
 - **Infrastructure Validation:** AWS SAM CLI template validation (`sam validate --lint`) passes cleanly.

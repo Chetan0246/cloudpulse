@@ -4,7 +4,7 @@
 **Evaluation Milestone:** Project Review 2  
 **Test Harness:** `pytest` 8.x, `moto` (AWS in-memory mocking), `vitest`, `@testing-library/react`  
 **Execution Timestamp:** 2026-10-24 | Release Candidate Verification  
-**Overall Status:** **100% PASS (421 / 421 Total Tests Across Backend & Frontend)**  
+**Overall Status:** **100% PASS (422 / 422 Total Tests Across Backend & Frontend)**  
 
 ---
 
@@ -14,7 +14,7 @@
 ============================= BACKEND TEST SUMMARY =============================
 Platform: Linux (Python 3.12 / pytest)
 Executed Layers: Root suite (10 groups) + Backend unit suite (15 files)
-Results: 372 passed
+Results: 373 passed
 Failures: 0 | Errors: 0 | Skipped: 0
 
 ============================ FRONTEND TEST SUMMARY =============================
@@ -33,7 +33,7 @@ AWS SAM Build (sam build): Build Succeeded
 
 ---
 
-## 2. Granular Backend Test Breakdown (372 Tests)
+## 2. Granular Backend Test Breakdown (373 Tests)
 
 ### 2.1 Root integration suite — `tests/` (95 tests)
 
@@ -51,7 +51,7 @@ AWS SAM Build (sam build): Build Succeeded
 | **L10** | **Edge Cases & Resilience:** Idempotency under duplicate events, partial failures, retries | `tests/edge_cases/test_edge_cases_and_resilience.py` | 12 | ✅ PASS |
 | **SUBTOTAL** | | | **95** | **100% PASS** |
 
-### 2.2 Backend unit suite — `backend/tests/unit/` (277 tests)
+### 2.2 Backend unit suite — `backend/tests/unit/` (278 tests)
 
 | Layer # | Testing Layer & Scope | Primary Test Files | Test Count | Status |
 |---|---|---|---|---|
@@ -59,11 +59,11 @@ AWS SAM Build (sam build): Build Succeeded
 | **B2** | **Services & Telemetry:** Simulation service, monitoring, metric publishing | `test_services.py` (3)<br/>`test_simulation.py` (15)<br/>`test_monitoring.py` (23) | 41 | ✅ PASS |
 | **B3** | **Lambda Handlers:** Simulator event handling, API handler wiring | `test_simulator_handler.py` (24)<br/>`test_api_handler.py` (5) | 29 | ✅ PASS |
 | **B4** | **Persistence & AWS Clients:** DynamoDB repositories, client factories, configuration | `test_repositories.py` (3)<br/>`test_aws_clients.py` (3)<br/>`test_config.py` (3) | 9 | ✅ PASS |
-| **B5** | **Recovery Engine:** Handler retry/escalation, strategy dispatch, end-to-end recovery | `test_recovery_handler.py` (31)<br/>`test_recovery_integration.py` (13)<br/>`test_recovery_strategies.py` (17) | 61 | ✅ PASS |
+| **B5** | **Recovery Engine:** Handler retry/escalation, strategy dispatch, end-to-end recovery | `test_recovery_handler.py` (32)<br/>`test_recovery_integration.py` (13)<br/>`test_recovery_strategies.py` (17) | 62 | ✅ PASS |
 | **B6** | **API Routers & Frontend Flow:** FastAPI routers, dashboard-facing response shapes | `test_routers.py` (6)<br/>`test_frontend_api_flow.py` (3) | 9 | ✅ PASS |
-| **SUBTOTAL** | | | **277** | **100% PASS** |
+| **SUBTOTAL** | | | **278** | **100% PASS** |
 
-**Backend total: 95 + 277 = 372 tests, all passing.**
+**Backend total: 95 + 278 = 373 tests, all passing.**
 
 ---
 
@@ -135,7 +135,7 @@ Every failure scenario is tested across the complete 9-step closed-loop lifecycl
 ## 6. How to Reproduce Test Results Locally
 
 ```bash
-# 1. Run the full backend suite exactly as CI does (372 tests)
+# 1. Run the full backend suite exactly as CI does (373 tests)
 PYTHONPATH=backend:. backend/.venv/bin/python -m pytest tests/ backend/tests/ -q
 
 # 2. Run the frontend suite (49 tests)

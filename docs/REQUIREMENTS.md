@@ -79,6 +79,6 @@
 | **NFR-03** | **Cost Containment** | Monthly cloud infrastructure spend shall not exceed .00 under Free Tier usage. | Cost audit (`COST_MANAGEMENT.md`) |
 | **NFR-04** | **Least Privilege** | Each Lambda role shall strictly allow only specific DynamoDB tables, SNS topics, and namespaces. | SAM template IAM policy check |
 | **NFR-05** | **Traceability** | All log entries shall be structured JSON with propagated `correlation_id` and `incident_id`. | CloudWatch log formatter check |
-| **NFR-06** | **Test Reliability** | 100% of backend tests shall run deterministically in isolated mock environments without external calls. | 372 backend tests pass |
+| **NFR-06** | **Test Reliability** | 100% of backend tests shall run deterministically in isolated mock environments without external calls. | 373 backend tests pass |
 | **NFR-07** | **UI Responsiveness** | Dashboard shall adaptively poll (3s during active incidents, 10s idle, 30s background). | Verified in Dashboard component |
 | **NFR-08** | **Reproducibility** | Entire stack deployable via a single `sam deploy` command. | `infrastructure/template.yaml` validation |
