@@ -36,7 +36,6 @@ Globals:
         SNS_TOPIC_ARN: !Ref NotificationsTopic
         AWS_REGION_NAME: !Ref AWS::Region
         LOG_LEVEL: !Ref LogLevel
-        EXECUTION_MODE: !Ref ExecutionMode
     Tags:
       Project: CloudPulse
       Course: BCSE355L
@@ -83,17 +82,59 @@ Parameters:
       - ERROR
     Description: Application logging verbosity.
 
-  ExecutionMode:
+  RealRemediationEnabled:
     Type: String
-    Default: HYBRID
-    AllowedValues:
-      - HYBRID
-      - REAL_AWS
-      - SIMULATION
-    Description: >
-      Self-healing execution mode. HYBRID mode detects target resource IDs
-      and executes real AWS SDK actions (EC2 reboot, AutoScaling, SSM, RDS failover)
-      when real cloud resources are targeted, while maintaining simulated fallback.
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: Explicit opt-in for allowlisted real AWS remediation. Keep false for simulator-only operation.
+
+  RealAllowedResourceId:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^[A-Z0-9-]{1,32}$"
+    Description: The sole CloudPulse resource ID allowed to trigger real actions (for example VM-001).
+
+  RealEc2InstanceId:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^i-[a-f0-9]+$"
+    Description: Dedicated SSM-managed EC2 instance ID used by restart and cleanup.
+
+  RealAsgName:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^[A-Za-z0-9-]{1,255}$"
+    Description: Dedicated Auto Scaling group for bounded scale-out; its MaxSize is the hard limit.
+
+  RealAlbListenerRuleArn:
+    Type: String
+    Default: "arn:aws:elasticloadbalancing:us-east-1:000000000000:listener-rule/app/cloudpulse-disabled/0000000000000000/0000000000000000/0000000000000000"
+    AllowedPattern: "^arn:aws[a-zA-Z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:listener-rule/app/.+$"
+    Description: Exact ALB listener rule ARN allowed for the network reroute action.
+
+  RealAlternateTargetGroupArn:
+    Type: String
+    Default: "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/cloudpulse-disabled/0000000000000000"
+    AllowedPattern: "^arn:aws[a-zA-Z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:targetgroup/.+$"
+    Description: Exact healthy alternate target group ARN used by network reroute.
+
+  RealAlternateInstanceId:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^i-[a-f0-9]+$"
+    Description: Distinct healthy EC2 target registered in the alternate target group.
+
+  RealFailoverTargetGroupArn:
+    Type: String
+    Default: "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/cloudpulse-disabled/0000000000000000"
+    AllowedPattern: "^arn:aws[a-zA-Z-]*:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:targetgroup/.+$"
+    Description: Exact target group containing both configured primary and standby targets.
+
+  RealStandbyInstanceId:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^i-[a-f0-9]+$"
+    Description: Dedicated standby EC2 instance, registered and healthy in the failover target group.
 
   EnablePublicFrontendBucket:
     Type: String
@@ -108,9 +149,31 @@ Parameters:
 # ──────────────────────────────────────────────────────────────────────────────
 # Conditions
 # ──────────────────────────────────────────────────────────────────────────────
+Rules:
+  RealRemediationRequiresConfiguredTargets:
+    RuleCondition: !Equals [!Ref RealRemediationEnabled, "true"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref RealAllowedResourceId, ""]]
+        AssertDescription: RealAllowedResourceId must be set when real remediation is enabled.
+      - Assert: !Not [!Equals [!Ref RealEc2InstanceId, ""]]
+        AssertDescription: RealEc2InstanceId must be set when real remediation is enabled.
+      - Assert: !Not [!Equals [!Ref RealAsgName, ""]]
+        AssertDescription: RealAsgName must be set when real remediation is enabled.
+      - Assert: !Not [!Equals [!Ref RealAlbListenerRuleArn, "arn:aws:elasticloadbalancing:us-east-1:000000000000:listener-rule/app/cloudpulse-disabled/0000000000000000/0000000000000000/0000000000000000"]]
+        AssertDescription: Replace the inert listener-rule ARN before enabling real remediation.
+      - Assert: !Not [!Equals [!Ref RealAlternateTargetGroupArn, "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/cloudpulse-disabled/0000000000000000"]]
+        AssertDescription: Replace the inert alternate target group ARN before enabling real remediation.
+      - Assert: !Not [!Equals [!Ref RealAlternateInstanceId, ""]]
+        AssertDescription: RealAlternateInstanceId must be set when real remediation is enabled.
+      - Assert: !Not [!Equals [!Ref RealFailoverTargetGroupArn, "arn:aws:elasticloadbalancing:us-east-1:000000000000:targetgroup/cloudpulse-disabled/0000000000000000"]]
+        AssertDescription: Replace the inert failover target group ARN before enabling real remediation.
+      - Assert: !Not [!Equals [!Ref RealStandbyInstanceId, ""]]
+        AssertDescription: RealStandbyInstanceId must be set when real remediation is enabled.
+
 Conditions:
   CreateEmailSubscription: !Not [!Equals [!Ref NotificationEmail, ""]]
   IsPublicFrontendEnabled: !Equals [!Ref EnablePublicFrontendBucket, "true"]
+  EnableRealRemediation: !Equals [!Ref RealRemediationEnabled, "true"]
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Resources
@@ -339,7 +402,19 @@ Resources:
       CodeUri: ../lambda/recovery
       Handler: handler.handler
       Role: !GetAtt RecoveryFunctionRole.Arn
-      Timeout: 60
+      Timeout: 120
+      Environment:
+        Variables:
+          REAL_REMEDIATION_ENABLED: !Ref RealRemediationEnabled
+          REAL_ALLOWED_RESOURCE_ID: !Ref RealAllowedResourceId
+          REAL_EC2_INSTANCE_ID: !Ref RealEc2InstanceId
+          REAL_ASG_NAME: !Ref RealAsgName
+          REAL_ALB_LISTENER_RULE_ARN: !Ref RealAlbListenerRuleArn
+          REAL_ALTERNATE_TARGET_GROUP_ARN: !Ref RealAlternateTargetGroupArn
+          REAL_ALTERNATE_INSTANCE_ID: !Ref RealAlternateInstanceId
+          REAL_FAILOVER_TARGET_GROUP_ARN: !Ref RealFailoverTargetGroupArn
+          REAL_PRIMARY_INSTANCE_ID: !Ref RealEc2InstanceId
+          REAL_STANDBY_INSTANCE_ID: !Ref RealStandbyInstanceId
       DeadLetterQueue:
         Type: SQS
         TargetArn: !GetAtt RecoveryDLQ.Arn
@@ -737,7 +812,8 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
-                  - dynamodb:Scan
+                  # A-18 FIX: Removed dynamodb:Scan — Query on ResourceIndex GSI is sufficient
+                  # for resource-filtered incident lookups. Full Scan is not needed.
                   - dynamodb:Query
                   - dynamodb:PutItem
                   - dynamodb:UpdateItem
@@ -875,25 +951,59 @@ Resources:
                 Action:
                   - sqs:SendMessage
                 Resource: !GetAtt RecoveryDLQ.Arn
-        - PolicyName: RecoveryRealAwsPolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - autoscaling:SetDesiredCapacity
-                  - autoscaling:DescribeAutoScalingGroups
-                  - ec2:DescribeInstances
-                  - ec2:RebootInstances
-                  - ec2:StartInstances
-                  - ec2:StopInstances
-                  - ec2:DescribeRouteTables
-                  - ssm:SendCommand
-                  - ssm:GetCommandInvocation
-                  - ssm:DescribeInstanceInformation
-                  - rds:DescribeDBInstances
-                  - rds:RebootDBInstance
-                Resource: "*"
+
+  # This policy is absent unless RealRemediationEnabled=true. Each write
+  # permission is pinned to an explicit deployment parameter; read-only
+  # discovery uses Resource: "*" where the AWS API does not support ARN scoping.
+  RecoveryRealRemediationPolicy:
+    Type: AWS::IAM::Policy
+    Condition: EnableRealRemediation
+    Properties:
+      PolicyName: !Sub cloudpulse-recovery-real-remediation-${Environment}
+      Roles:
+        - !Ref RecoveryFunctionRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: ReadDedicatedAutoScalingGroup
+            Effect: Allow
+            Action:
+              - autoscaling:DescribeAutoScalingGroups
+            Resource: "*"
+          - Sid: ScaleOnlyConfiguredAutoScalingGroup
+            Effect: Allow
+            Action:
+              - autoscaling:SetDesiredCapacity
+            Resource: !Sub arn:${AWS::Partition}:autoscaling:${AWS::Region}:${AWS::AccountId}:autoScalingGroup:*:autoScalingGroupName/${RealAsgName}
+          - Sid: RunOnlyFixedSsmDocumentOnConfiguredInstance
+            Effect: Allow
+            Action:
+              - ssm:SendCommand
+            Resource:
+              - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript
+              - !Sub arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${RealEc2InstanceId}
+          - Sid: InspectOnlyConfiguredTargetGroups
+            Effect: Allow
+            Action:
+              - elasticloadbalancing:DescribeTargetHealth
+            Resource:
+              - !Ref RealAlternateTargetGroupArn
+              - !Ref RealFailoverTargetGroupArn
+          - Sid: ReadSsmCommandResult
+            Effect: Allow
+            Action:
+              - ssm:GetCommandInvocation
+            Resource: "*"
+          - Sid: ChangeOnlyConfiguredListenerRule
+            Effect: Allow
+            Action:
+              - elasticloadbalancing:ModifyRule
+            Resource: !Ref RealAlbListenerRuleArn
+          - Sid: DeregisterTargetsOnlyFromConfiguredFailoverGroup
+            Effect: Allow
+            Action:
+              - elasticloadbalancing:DeregisterTargets
+            Resource: !Ref RealFailoverTargetGroupArn
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Outputs

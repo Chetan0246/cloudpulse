@@ -1,10 +1,10 @@
 """
 Recovery Lambda entry point — CloudPulse Self-Healing Engine.
 
-SAFETY NOTICE: All recovery actions are SIMULATED. This handler mutates
-virtual resource state in DynamoDB and resets synthetic CloudWatch metrics.
-It does NOT call any real AWS compute/database infrastructure APIs
-(no ec2:*, rds:*, ecs:*, or lambda:DeleteFunction calls).
+SAFETY NOTICE: Recovery remains simulated unless
+REAL_REMEDIATION_ENABLED is explicitly set to true. Real mode uses the fixed,
+deployment-configured allowlist and fixed AWS actions in real_remediation.py;
+it never accepts AWS target identifiers or shell commands from event payloads.
 
 Triggered by EventBridge when:
   1. A CloudWatch Alarm enters ALARM state (source: aws.cloudwatch)
@@ -67,6 +67,7 @@ from app.repositories.resource_repository import ResourceRepository
 from app.services.monitoring_service import MonitoringService
 from app.services.notification_service import NotificationService, NotificationTransition
 from strategies import MAX_RECOVERY_ATTEMPTS, RecoveryStrategyError, dispatch_strategy
+from real_remediation import execute_real_remediation, should_execute_real_remediation
 
 logger = logging.getLogger(__name__)
 
@@ -323,7 +324,12 @@ def handler(event: dict, context: Any) -> dict:
                 "simulated_duration_s": strategy.simulated_duration_seconds,
             },
         )
+        # Preserve the simulator path unless the explicit, default-off gate is enabled.
+        # The strategy's virtual metric delta still updates the demo record for audit/UI
+        # continuity; the real AWS effect is separately recorded in outcome_msg.
         outcome_msg, metrics_delta = strategy.execute(resource_id)
+        if should_execute_real_remediation(resource_id):
+            outcome_msg = execute_real_remediation(failure_type, resource_id)
         recovery_end_time = datetime.now(timezone.utc)
 
         # ── 7. Success path ────────────────────────────────────────────────────
