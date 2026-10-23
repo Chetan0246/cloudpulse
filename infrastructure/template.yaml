@@ -951,11 +951,22 @@ Resources:
             Resource:
               - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript
               - !Sub arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${RealEc2InstanceId}
-          - Sid: InspectConfiguredLoadBalancingTargetsAndRule
+          - Sid: InspectOnlyConfiguredTargetGroups
             Effect: Allow
             Action:
               - elasticloadbalancing:DescribeTargetHealth
+            Resource:
+              - !Ref RealAlternateTargetGroupArn
+              - !Ref RealFailoverTargetGroupArn
+          - Sid: ReadOnlyConfiguredListenerRule
+            Effect: Allow
+            Action:
               - elasticloadbalancing:DescribeRules
+            Resource: !Ref RealAlbListenerRuleArn
+          - Sid: ReadSsmCommandResult
+            Effect: Allow
+            Action:
+              - ssm:GetCommandInvocation
             Resource: "*"
           - Sid: ChangeOnlyConfiguredListenerRule
             Effect: Allow
