@@ -24,7 +24,7 @@
 
 An **Incident** in CloudPulse represents a detected disruption to a simulated virtual resource (`VM-001`, `API-001`, `DB-001`, `STORAGE-001`). Incidents are created deterministically upon failure detection and transition through an automated self-healing lifecycle managed by EventBridge, the Recovery Lambda, and SNS.
 
-All recovery actions are **simulated**: synthetic resource metrics in DynamoDB are restored to nominal baselines and published to CloudWatch. No real AWS compute or database infrastructure APIs are invoked.
+Recovery behaviour depends on the execution mode. In the default `SIMULATION` mode, synthetic resource metrics in DynamoDB are restored to nominal baselines and published to CloudWatch, and no real AWS workload APIs are invoked. `HYBRID` and `REAL_AWS` are opt-in and require every target to be listed in `REAL_AWS_ALLOWLIST`; in those modes the Recovery Lambda issues genuine `boto3` calls (EC2 reboot, ASG capacity change, ALB listener reroute, SSM run-command, RDS reboot). The live evidence is recorded in `docs/VERIFICATION_APPENDIX.md`.
 
 ---
 

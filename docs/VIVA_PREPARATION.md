@@ -43,14 +43,14 @@
 - **The Evaluator's Angle:**  
   *"Are you actually fixing anything, or are you just running a script that resets numbers in a database? Isn't this just a glorified database updater?"*
 - **The Architect's Answer:**  
-  In CloudPulse, **self-healing is an orchestrated state and telemetry restoration workflow**. We do not spin up physical EC2 instances; we execute the exact *architectural control plane logic* that a real production remediation system executes:
+  In CloudPulse, **self-healing is an orchestrated state and remediation workflow**. In the default `SIMULATION` mode it restores synthetic telemetry; in opt-in `HYBRID` / `REAL_AWS` mode the same workflow dispatches real AWS SDK actions against the allowlisted workload fleet. Both modes execute the same *architectural control plane logic* that a production remediation system executes:
   1. **Failure Ingestion:** Receives an alert payload indicating a specific failure condition.
   2. **Strategy Dispatch:** Maps the failure type to a dedicated recovery strategy (`SCALE_OUT`, `SERVICE_RESTART`, `STORAGE_CLEANUP`, `NETWORK_REROUTE`, `FAILOVER`).
   3. **State Transition:** Atomically locks the resource out of failure state (`RECOVERY_INITIATED` $\rightarrow$ `RECOVERY_IN_PROGRESS`).
   4. **Telemetry Reset:** Applies deterministic nominal operating metrics (e.g. CPU back to 25%, latency back to 15ms).
   5. **Metric Confirmation:** Calls `PutMetricData` on CloudWatch to reset the remote monitoring alarm back to `OK`.
   6. **Audit & Escalation:** Updates the 14-field incident record with recovery duration and attempts, triggering SNS notifications.  
-  In an enterprise setting, the `execute()` method in `strategies.py` would invoke an AWS Systems Manager (SSM) Automation Document or an ECS `UpdateService` API call. The state machine, concurrency locks, event routing, and audit trails would remain identical.
+  In `HYBRID` / `REAL_AWS` mode the `execute()` method in `strategies.py` already invokes native AWS APIs: `ec2:RebootInstances`, `autoscaling:SetDesiredCapacity`, `elasticloadbalancing:ModifyListener`, `ssm:SendCommand`, and `rds:RebootDBInstance`. The state machine, concurrency locks, event routing, and audit trails are identical in both modes.
 - **Code Reality Check:**  
   - Documented honestly in `lambda/recovery/strategies.py` (lines 11–37) and `lambda/recovery/handler.py` (lines 309–402).
 
@@ -60,11 +60,15 @@
 - **The Evaluator's Angle:**  
   *"Give me a precise demarcation. If AWS audited your account today, what would they see?"*
 - **The Architect's Answer:**  
-  - **100% Simulated:**
-    1. The target resource fleet (`VM-001`, `API-001`, `DB-001`, `STORAGE-001` are items in DynamoDB, not virtual machines or database instances).
-    2. The fault mechanics (CPU spikes, memory leaks, disk fill are synthetic metric values).
-    3. The mechanical action of the strategy (it resets attributes in DynamoDB rather than issuing hypervisor commands).
-  - **100% Real AWS Infrastructure:**
+  - **Default (`SIMULATION`) — simulated target fleet:**
+    1. The virtual resources (`VM-001`, `API-001`, `DB-001`, `STORAGE-001`) are items in DynamoDB, not virtual machines or database instances.
+    2. The fault mechanics (CPU spikes, memory leaks, disk fill) are synthetic metric values.
+    3. The default strategy action resets attributes in DynamoDB rather than issuing hypervisor commands.
+  - **Opt-in (`HYBRID` / `REAL_AWS`) — real AWS workload fleet:**
+    1. `ExecutionMode` must be set explicitly and every target must appear in `REAL_AWS_ALLOWLIST`; otherwise the handler refuses the action.
+    2. Verified live actions: EC2 `RebootInstances` on `i-083e8c6b1fc9ca0b7`, ASG scale-out on `asg-cloudpulse-fleet` (1 → 2), ALB listener reroute on `alb-cloudpulse-gw`, SSM `SendCommand` on the EC2 worker, and an RDS fallback reboot on `rds-cloudpulse-db` (`ForceFailover` is attempted first, but the development instance is single-AZ).
+    3. Evidence: six incident records in DynamoDB, SSM command output, and `docs/VERIFICATION_APPENDIX.md`.
+  - **100% Real AWS Infrastructure (control plane):**
     1. **Amazon CloudWatch:** Real custom namespace `CloudPulse`, real metric data points ingested, real alarms evaluating over real time windows.
     2. **Amazon EventBridge:** Real default event bus, real JSON event rules, and real asynchronous target dispatch.
     3. **AWS Lambda:** Real `arm64` Graviton2 execution environments running Python 3.12, subject to real cold starts, execution timeouts, and IAM policies.

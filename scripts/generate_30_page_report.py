@@ -229,7 +229,8 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
     add_callout(
         "CloudPulse v2 transitions autonomous cloud reliability from simulated digital-twin concepts to live commercial "
         "cloud operations. Deployed in AWS Region ap-south-1 (Mumbai), CloudPulse v2 monitors and heals real EC2 instances, "
-        "Auto Scaling Groups, Application Load Balancers, and Amazon RDS PostgreSQL databases with sub-5.8s MTTR.",
+        "Auto Scaling Groups, Application Load Balancers, and Amazon RDS PostgreSQL databases; the six exercised real "
+        "remediations recorded a measured 3.2–6.8 s time-to-dispatch.",
         title="EXECUTIVE ARCHITECTURAL STATEMENT"
     )
 
@@ -265,15 +266,16 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
         ["5.0", "Experimental Results, Verification & Benchmarking", "24"],
         ["  5.1", "Automated Test Suite Verification (422 Verified Tests)", "24"],
         ["  5.2", "Live 5-Scenario Chaos Injection & Remediation Traces", "25"],
-        ["  5.3", "Performance Benchmarking & MTTR Reduction Analysis", "26"],
+        ["  5.3", "Performance Benchmarking & Detection-to-Dispatch Analysis", "26"],
         ["  5.4", "Zero-Destruction Safety Governance Verification", "27"],
         ["  5.5", "Real AWS Credit & Cost Analysis ($100 Credit Allocation)", "27"],
-        ["6.0", "Conclusion, Lessons Learned & Future Scope", "28"],
-        ["  6.1", "Project Summary & Key Engineering Takeaways", "28"],
-        ["  6.2", "Comparative Evaluation with Commercial Enterprise APMs", "28"],
-        ["  6.3", "Future Research & Engineering Roadmap", "29"],
-        ["7.0", "Comprehensive Viva Voce Defense Cheat-Sheet", "29"],
-        ["8.0", "Appendix & Course Evaluation Rubric Sheet", "30"],
+        ["  5.6", "Known Limitations & Engineering Trade-offs", "28"],
+        ["6.0", "Conclusion, Lessons Learned & Future Scope", "29"],
+        ["  6.1", "Project Summary & Key Engineering Takeaways", "29"],
+        ["  6.2", "Comparative Evaluation with Commercial Enterprise APMs", "29"],
+        ["  6.3", "Future Research & Engineering Roadmap", "30"],
+        ["7.0", "Comprehensive Viva Voce Defense Cheat-Sheet", "30"],
+        ["8.0", "Appendix & Course Evaluation Rubric Sheet", "31"],
     ]
     # Compact TOC table that fits on single page 2
     tbl_toc = doc.add_table(rows=len(toc_data) + 1, cols=3); tbl_toc.alignment = WD_TABLE_ALIGNMENT.CENTER
@@ -397,7 +399,7 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
     add_bullet("Enforce strict mathematical idempotency using DynamoDB atomic conditional expressions and a 7-stage Finite State Machine.")
     add_bullet("Implement Zero-Destruction Safety Governance via cryptographic allowlisting (REAL_AWS_ALLOWLIST) and read-only diagnostics.")
     add_bullet("Deliver a production React 18 + TypeScript single-page dashboard with real-time telemetry, live steppers, and analytics.")
-    add_bullet("Empirically validate system resilience through 422 automated tests and live chaos injections, proving sub-6-second MTTR.")
+    add_bullet("Empirically validate system resilience through 422 automated tests and live chaos injections, recording a measured 3.2–6.8 s time-to-dispatch across the exercised AWS actions.")
 
     add_h2("1.3 Comprehensive Literature Survey (10 Reputed TR / IF Journals)")
     add_body(
@@ -429,7 +431,7 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
         ["Nardelli et al. (2021) [FGCS]", "Workflow Choreography", "Analyzed", "Declarative syntax", "No (Syntax DSL)", "Not Measured"],
         ["Brogi et al. (2022) [Computing]", "Trans-Cloud Reliability", "Not addressed", "Markov model only", "No (Abstract math)", "Simulated"],
         ["Cotroneo et al. (2021) [JSS]", "Software Failure AI", "Not addressed", "Classification only", "No (Offline traces)", "90% MTTA only"],
-        ["CloudPulse v2 (This Project)", "Autonomous Cloud SRE", "Optimized (22ms warm)", "Full Closed-Loop", "Yes (EC2, ASG, ALB, RDS)", "89.3% MTTR Drop (<5.8s)"],
+        ["CloudPulse v2 (This Project)", "Autonomous Cloud SRE", "Optimized (22ms warm)", "Full Closed-Loop", "Yes (EC2, ASG, ALB, RDS)", "Time-to-dispatch 3.2–6.8 s"],
     ]
     add_table(taxonomy_headers, taxonomy_data, col_widths=[1.5, 1.2, 0.9, 1.1, 1.1, 1.0])
 
@@ -452,7 +454,7 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
         ["Auto-Scaling Integration", "Simulated CPU multiplier value update", "Real Auto Scaling Group (asg-cloudpulse-fleet)", "Dynamic EC2 instance launch (min=1, max=3, desired=2)"],
         ["Load Balancer Routing", "Simulated latency millisecond clamp", "Live Application Load Balancer (alb-cloudpulse-gw)", "Real traffic rerouting to standby target group"],
         ["Database Failover", "Simulated downtime flag toggle", "Live Amazon RDS PostgreSQL (rds-cloudpulse-db)", "Real database failover and reboot (Port 5432)"],
-        ["Remote Storage Diagnostics", "Simulated disk space cleanup log", "Live AWS Systems Manager (SSM) Run Command", "Real shell execution (df -h, journalctl) via SSM agent"],
+        ["Remote Storage Diagnostics", "Simulated storage diagnostics log", "Live AWS Systems Manager (SSM) Run Command", "Real shell execution (df -h, journalctl) via SSM agent"],
         ["Safety Governance", "None (No real infrastructure risk)", "REAL_AWS_ALLOWLIST + Non-Destructive Checks", "Cryptographic allowlisting prevents collateral damage"],
         ["DynamoDB Concurrency", "Unconditional put_item (race-prone)", "Atomic Conditional Writes (Optimistic Locking)", "Mathematically guarantees zero duplicate recoveries"],
         ["Reliability Calculation", "Stale cumulative aggregates in DynamoDB", "Dynamic Window Overlap Integrals (Clamped)", "Exact DAILY, WEEKLY, CUMULATIVE availability math"],
@@ -786,6 +788,13 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
     )
     add_code(strat_code, caption="Listing 4.1: Real AWS Strategy Pattern Remediation Engine (strategies.py)")
 
+    add_body(
+        "The development database is single-AZ, so ForceFailover raised a ClientError during the live run and the strategy "
+        "fell through to a plain reboot_db_instance call. The incident record therefore reports a successful reboot rather "
+        "than a Multi-AZ failover, and Chapter 5 labels the action accordingly.",
+        bold_prefix="Deployed behaviour: "
+    )
+
     add_h2("4.4 Recovery Lambda Handler & State Gatekeeper (handler.py)")
     add_body(
         "The Lambda handler function (lambda/recovery/handler.py) serves as the gatekeeper, ensuring mathematical idempotency "
@@ -867,23 +876,32 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
         "boto3 Actuation: ssm.send_command(InstanceIds=['i-083e8c6b1fc9ca0b7'], DocumentName='AWS-RunShellScript')\n"
         "SSM Output: CommandId '5334ade3-6875-4414-b7dd-c8a298e49d35' | Status: Success\n"
         "  -> stdout: 'Filesystem Size Used Avail Use% Mounted on /dev/nvme0n1p1 8.0G 1.6G 6.4G 20% /tmp 0 /var/log 8.7M'\n"
-        "Result: Storage diagnostic executed remotely on live EC2 worker | State: RECOVERED | Duration: 4.12s\n"
+        "Result: Storage diagnostic executed remotely on live EC2 worker | State: RECOVERED | Duration: 3.29s\n"
         "\n"
         "[SCENARIO 4: FS-04 NETWORK LATENCY -> ALB TRAFFIC REROUTE]\n"
         "Fault Injected: POST /simulate/failure {'resourceId': 'ALB-CLOUDPULSE-GW', 'failureType': 'NETWORK_LATENCY'}\n"
         "boto3 Actuation: elbv2.modify_listener(ListenerArn=..., DefaultActions=[{'Type': 'forward', 'TargetGroupArn': standby_tg}])\n"
         "AWS Verification: aws elbv2 describe-listeners --load-balancer-arn arn:aws:elasticloadbalancing:...:alb-cloudpulse-gw\n"
-        "  -> DefaultActions[0].TargetGroupArn: '...:targetgroup/tg-cloudpulse-standby/f5bad312b59f20ba' | Duration: 2.15s\n"
+        "  -> DefaultActions[0].TargetGroupArn: '...:targetgroup/tg-cloudpulse-standby/f5bad312b59f20ba' | Duration: 3.23s\n"
+        "Post-run: listener restored to tg-cloudpulse-primary via scripts/restore_demo_alb.sh; ALB returns HTTP 200.\n"
         "\n"
-        "[SCENARIO 5: FS-05 SERVICE DOWNTIME -> RDS POSTGRESQL REBOOT/FAILOVER]\n"
+        "[SCENARIO 5: FS-05 SERVICE DOWNTIME -> RDS FAILOVER ATTEMPT / FALLBACK REBOOT]\n"
         "Fault Injected: POST /simulate/failure {'resourceId': 'RDS-CLOUDPULSE-DB', 'failureType': 'SERVICE_DOWNTIME'}\n"
-        "boto3 Actuation: rds.reboot_db_instance(DBInstanceIdentifier='rds-cloudpulse-db')\n"
+        "boto3 Actuation: rds.reboot_db_instance(..., ForceFailover=True) -> ClientError -> reboot_db_instance(...)\n"
         "AWS Verification: aws rds describe-db-instances --db-instance-identifier rds-cloudpulse-db\n"
-        "  -> DBInstanceStatus: 'rebooting' (Port 5432 PostgreSQL 16 cluster) | State: RECOVERED | Duration: 6.40s"
+        "  -> DBInstanceStatus: 'rebooting' (Port 5432 PostgreSQL 16 cluster) | State: RECOVERED | Duration: 3.69s"
     )
     add_code(trace_text, caption="Listing 5.1: Live AWS SDK Remediation Traces Across All 5 Scenarios")
 
-    add_h2("5.3 Performance Benchmarking & MTTR Reduction Analysis")
+    add_body(
+        "Six real remediations were recorded in DynamoDB on 24 October 2026: EC2 RebootInstances twice (6.80 s and 3.52 s), "
+        "ASG scale-out 1 to 2 (5.87 s), SSM SendCommand Success (3.29 s), ALB listener reroute (3.23 s), and the RDS fallback "
+        "reboot (3.69 s). Each duration is detected_at to resolved_at, i.e. the time until the remediation is dispatched and "
+        "the incident is closed, not the time until the workload is fully healthy again.",
+        bold_prefix="Measured evidence: "
+    )
+
+    add_h2("5.3 Performance Benchmarking & Detection-to-Dispatch Analysis")
     add_body("Table 5.2 summarizes comparative performance benchmarks across incident handling phases:")
     bench_headers = ["Incident Handling Phase", "Manual Runbook (Standard SRE)", "Semi-Automated Scripts", "CloudPulse v2 Autonomous Engine", "Improvement Factor"]
     bench_data = [
@@ -892,14 +910,16 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
         ["3. Remediation Execution", "5 – 15 minutes (Manual AWS Console)", "30 – 90 seconds (CLI script)", "1.8 – 4.2 seconds (boto3 SDK)", "97.5% Faster"],
         ["4. Verification & State Auditing", "3 – 5 minutes (Manual health check)", "1 – 2 minutes (CLI check)", "45 ms (Atomic DynamoDB write)", "98.5% Faster"],
         ["5. Stakeholder Notification", "2 – 5 minutes (Slack/Email compose)", "30 seconds (Webhook)", "120 ms (Amazon SNS publish)", "96.0% Faster"],
-        ["Overall Total MTTR", "20 – 50 minutes (Avg: 35.0 min)", "5 – 10 minutes (Avg: 7.5 min)", "3.5 – 6.4 seconds (Avg: 4.8 sec)", "89.3% Reduction"],
+        ["Overall Detection-to-Dispatch", "20 – 50 minutes (Avg: 35.0 min)", "5 – 10 minutes (Avg: 7.5 min)", "3.2 – 6.8 seconds (mean 4.40 s, median 3.61 s)", "≈99.0% vs. scripted"],
     ]
     add_table(bench_headers, bench_data, col_widths=[1.6, 1.6, 1.4, 1.6, 1.1])
 
     add_callout(
-        "Empirical Benchmark Finding: CloudPulse v2 achieves an average closed-loop MTTR of 4.8 seconds across all 5 "
-        "failure scenarios, representing an 89.3% reduction compared to semi-automated scripting and over 99.7% reduction "
-        "compared to human on-call incident response, completely eliminating human operational latency.",
+        "Measured Benchmark Finding: across the six exercised real remediations, the detection-to-dispatch interval ranged "
+        "from 3.23 s to 6.80 s (mean 4.40 s, median 3.61 s). That is about 99.0% faster than the semi-automated scripting "
+        "baseline and 99.8% faster than manual on-call handling. The measurement stops when the SDK action is dispatched and "
+        "the incident is closed; it does not include instance boot, database availability, or target-group health "
+        "convergence, which can take tens of seconds to minutes.",
         title="BENCHMARK PERFORMANCE VERIFICATION"
     )
 
@@ -912,21 +932,30 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
     )
 
     add_h2("5.5 Real AWS Credit & Cost Analysis ($100 Credit Allocation)")
-    add_body("Table 5.3 provides a detailed operational cost breakdown confirming that the running fleet is 100% absorbed within credits:")
+    add_body("Table 5.3 gives a list-price estimate for continuous operation. These are planning figures, not billing data; actual spend depends on ASG scaling, data transfer, and whether the account still has Free Tier eligibility:")
     cost_headers = ["AWS Component & Resource", "Billing Dimension & Rate", "Usage Profile / Month", "Monthly Cost (USD)", "Credit Consumption"]
     cost_data = [
         ["EC2 Worker (t3.micro, AL2023)", "$0.0104 / instance-hr", "720 hours / month", "$7.49", "Free Tier (750 hrs free) / Credits"],
         ["Auto Scaling Group Workers (x2)", "$0.0104 / instance-hr", "Dynamic scale-out (~300 hrs)", "$3.12", "Deducted from $100 Credits"],
-        ["Application Load Balancer (ALB)", "$0.0225 / hr + $0.008 / LCU", "720 hours + 1.2 LCUs", "$17.10", "Deducted from $100 Credits"],
+        ["Application Load Balancer (ALB)", "$0.0225 / hr + $0.008 / LCU-hr", "720 hours + 1.2 LCU-hr", "$23.11", "Deducted from $100 Credits"],
         ["Amazon RDS PostgreSQL (db.t4g.micro)", "$0.0180 / hr + $0.115/GB gp3", "720 hours + 20 GB gp3", "$15.26", "Deducted from $100 Credits"],
         ["AWS Lambda (API & Recovery)", "$0.20 / 1M reqs + duration", "~25,000 invocations", "< $0.15", "Free Tier (1M reqs free)"],
         ["Amazon DynamoDB (3 tables)", "Pay-Per-Request ($0.25/M)", "~150,000 RCU/WCU", "< $0.10", "Free Tier (25 GB free)"],
         ["Amazon EventBridge & CloudWatch", "$1.00 / 1M events + metrics", "~5,000 events + custom metrics", "< $0.45", "Free Tier / Deducted from Credits"],
         ["Amazon S3 Static Website Hosting", "$0.023 / GB + GET requests", "35 MB storage + assets", "< $0.05", "Free Tier (5 GB free)"],
         ["Amazon SNS & SQS DLQ", "$0.50 / 1M publishes", "~2,000 publishes", "< $0.02", "Free Tier (1M publishes free)"],
-        ["Total Fleet Monthly Burn Rate", "All 5 Workloads Active", "Continuous 24/7 Operations", "~$35 – $43 / mo", "Fully Covered (~2.5 months runway)"],
+        ["Total Fleet Monthly Burn Rate", "All 5 Workloads Active", "Continuous 24/7 Operations", "≈ $44 – $56 / mo", "Estimate; credits/Free Tier vary"],
     ]
     add_table(cost_headers, cost_data, col_widths=[1.7, 1.6, 1.4, 1.2, 1.4])
+
+    add_h2("5.6 Known Limitations & Engineering Trade-offs")
+    add_body("The delivered system is explicit about what it does and does not measure. The following are deliberate scope decisions for a course-scale deployment:")
+    add_bullet("Time-to-dispatch, not time-to-healthy: the 3.2–6.8 s figures cover detection, gating, SDK dispatch, and incident closure. No post-action health predicate runs inside the recovery path, so EC2 boot, RDS availability, and ALB target-group convergence are not included.")
+    add_bullet("Alarm coverage is virtual-resource only: the 12 CloudWatch alarms in infrastructure/template.yaml cover the four simulated resources. The real EC2/ASG/ALB/RDS fleet is exercised through the /simulate/failure endpoint and direct CLI runs rather than through those alarms.")
+    add_bullet("The real fleet is provisioned out-of-band: sam deploy creates the serverless control plane and the virtual resources. The EC2 instance, Auto Scaling Group, ALB, and RDS instance were created with scripts/manage_real_aws.py and the AWS CLI, so a clean SAM deployment alone does not recreate them.")
+    add_bullet("Composite health scoring has blind spots: ServiceHealth is a weighted aggregate, and a single-resource total outage scores around 72.8, which is not low enough to trip the composite alarm on its own. Detection therefore relies mainly on the per-metric CPU, latency, and service alarms.")
+    add_bullet("Single-region, four-resource scale: the allowlist contains 8 IDs covering 4 resources in ap-south-1. The design has not been validated across regions, larger fleets, or concurrent multi-resource incidents.")
+    add_bullet("Safe-by-default execution: SIMULATION is the default mode, and HYBRID/REAL_AWS require explicit configuration plus REAL_AWS_ALLOWLIST membership. This is a safety feature, but it means out-of-the-box behaviour is simulated until the operator opts in.")
 
     # ==================== CHAPTER 6 ====================
     add_h1("6.0 Conclusion, Lessons Learned & Future Scope", page_break=False)
@@ -940,7 +969,7 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
     )
     add_body(
         "Key engineering takeaways realized through this implementation include:\n"
-        "• Event Choreography Over Orchestration: Decentralized event routing via Amazon EventBridge eliminates the latency and state overhead of centralized orchestrators (e.g., Step Functions), enabling sub-second reaction times.\n"
+        "• Event Choreography Over Orchestration: Decentralized event routing via Amazon EventBridge removes the latency and state overhead of centralized orchestrators (e.g., Step Functions), keeping the measured detection-to-dispatch path in the low single-digit seconds (3.2–6.8 s).\n"
         "• Atomic Concurrency Guards: In distributed cloud systems, mathematical idempotency cannot rely on memory locks; atomic DynamoDB conditional expressions are essential to prevent recovery storms.\n"
         "• Strategy Pattern Extensibility: Decoupling failure definitions from remediation logic enables seamless onboarding of new failure scenarios without modifying the core control plane.\n"
         "• Separation of Concerns: Running the control plane entirely serverless ensures that even catastrophic failures in workload infrastructure (e.g., EC2 panics or database crashes) leave the reliability engine completely unaffected."
@@ -951,7 +980,7 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
     apm_headers = ["Evaluation Metric", "Amazon CloudWatch", "Datadog / Dynatrace", "PagerDuty Event Orchestration", "CloudPulse v2 (This Project)"]
     apm_data = [
         ["Primary Role", "Metric collection & alarms", "Observability & tracing", "Incident notification routing", "Autonomous closed-loop self-healing"],
-        ["Remediation Capability", "Alarms only (Passive)", "Manual webhooks only", "Trigger webhooks (Semi-auto)", "Native AWS SDK actuation (Sub-6s MTTR)"],
+        ["Remediation Capability", "Alarms only (Passive)", "Manual webhooks only", "Trigger webhooks (Semi-auto)", "Native AWS SDK actuation (3.2–6.8 s to dispatch)"],
         ["Idle Infrastructure Cost", "Included in AWS tier", "$15 – $65 / host / month", "$21 – $41 / user / month", "$0.00 / month (100% Serverless control plane)"],
         ["Multi-Tier AWS Scope", "AWS metrics only", "Agent-based metrics", "Alert routing only", "Real EC2, ASG, ALB, RDS, and SSM"],
         ["Idempotency Protection", "None (Duplicate alarms)", "Deduplication key only", "Alert grouping only", "DynamoDB atomic conditional expressions"],
@@ -1000,11 +1029,13 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
             "cleanup dispatches strictly non-destructive diagnostic shell commands (df -h, du -sh) rather than destructive deletions (rm -rf)."
         ),
         (
-            "Q5: How does the system achieve an MTTR under 5.8 seconds?",
+            "Q5: How fast is the recovery path, and what exactly does that number measure?",
             "Traditional monitoring introduces an operational bottleneck: an engineer must acknowledge an alert, log into a VPN, "
             "inspect runbooks, and issue manual commands (15–45 minutes). CloudPulse codifies runbooks into AWS Lambda using the "
             "Strategy Pattern. The moment EventBridge receives the CloudWatch alarm, RecoveryFunction dispatches the AWS SDK remediation "
-            "within milliseconds, achieving closed-loop recovery in under 5.8 seconds."
+            "within milliseconds. Across the six real remediations the detection-to-dispatch interval was 3.23–6.80 s "
+            "(mean 4.40 s). That figure ends when the SDK action is dispatched and the incident is closed; it is not a claim "
+            "that the workload is already healthy, which can take longer for EC2 boot or RDS availability."
         ),
         (
             "Q6: Why did you choose Amazon EventBridge over AWS Step Functions or Amazon SQS?",

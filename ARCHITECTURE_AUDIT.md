@@ -5,6 +5,8 @@
 **Course:** BCSE355L – Cloud Architecture Design | Fall 2026-2027  
 **Baseline test counts:** 348 backend / 49 frontend — all passing before audit.
 
+> **Status note (2026-10-24):** this audit covers the SIMULATION-only v1 baseline. The current build also supports opt-in `HYBRID` / `REAL_AWS` execution gated by `REAL_AWS_ALLOWLIST`; see `docs/VERIFICATION_APPENDIX.md` for the current evidence.
+
 ---
 
 ## Summary Table
@@ -173,7 +175,7 @@ Correct. Max 5 FailureType values. Acceptable.
 | Only approved AWS services used | ✅ |
 | Each Lambda has own IAM role | ✅ |
 | IAM least-privilege | ✅ (minor A-18 fixed) |
-| No real AWS resource modification | ✅ Confirmed |
+| No real AWS resource modification (v1 SIMULATION baseline) | ✅ Confirmed at time of audit |
 | No hardcoded secrets | ✅ |
 | Config via environment variables | ✅ |
 | Idempotent recovery (two-layer guard) | ✅ |

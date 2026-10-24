@@ -23,9 +23,10 @@ ABSTRACT = (
     "Systems Manager (SSM) agent run-commands. CloudPulse enforces strict Zero-Destruction Safety Governance through "
     "cryptographic resource allowlisting (REAL_AWS_ALLOWLIST) and non-destructive diagnostic execution. Across 422 "
     "automated tests (373 backend integration/unit tests and 49 frontend Vitest suites) and live AWS chaos injections, "
-    "CloudPulse achieves a 100% test pass rate, 0 unhandled dead-letter queue failures, and reduces incident MTTR "
-    "from 45 minutes to under 5.8 seconds—an 87.1% reduction in downtime—while maintaining an operational cost "
-    "fully absorbed within standard student AWS credit allocations (~$35–$45/month)."
+    "CloudPulse achieves a 100% test pass rate and no dead-letter queue failures in the exercised scenarios, and reduces "
+    "the detection-to-dispatch interval from a 45-minute manual baseline to a measured 3.2–6.8 seconds (mean 4.40 s), "
+    "an over-99% reduction in that interval. The estimated operational cost is roughly $44–$56 per month at list prices, "
+    "though actual spend depends on Free Tier eligibility and credits."
 )
 
 LITERATURE_SURVEY = [
@@ -124,7 +125,7 @@ LITERATURE_SURVEY = [
         "gap": (
             "The authors focus predominantly on telemetry ingestion pipelines and omit concrete self-healing actuation. "
             "CloudPulse incorporates the transient storage exhaustion and network latency scenarios identified by Cassel et al., "
-            "providing automated SSM disk cleanup and ALB traffic rerouting strategies."
+            "providing automated read-only SSM storage diagnostics and ALB traffic rerouting strategies."
         ),
     },
     {
