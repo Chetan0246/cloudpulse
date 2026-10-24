@@ -60,14 +60,14 @@ export const Header: React.FC<HeaderProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h1 className="text-lg font-bold text-slate-100 tracking-tight font-mono">
-                  CloudPulse
+                  CloudPulse <span className="text-cyan-400">v2</span>
                 </h1>
-                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  Control Center
+                <span className="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Real AWS & Hybrid
                 </span>
               </div>
               <p className="text-xs text-slate-400 hidden sm:block">
-                Autonomous Self-Healing Cloud Reliability Engine
+                Autonomous Self-Healing Engine • Live AWS Service Control Plane
               </p>
             </div>
           </div>

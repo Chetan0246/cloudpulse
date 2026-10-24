@@ -39,6 +39,7 @@ export interface ResourceSummary {
   memory_utilization?: number;
   storage_utilization?: number;
   network_latency_ms?: number;
+  tags?: Record<string, string>;
 }
 
 export interface Resource extends ResourceSummary {

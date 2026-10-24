@@ -586,6 +586,8 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {resources.map((res) => {
                   const isSelected = res.resource_id === resourceId;
+                  const isRealEc2 = res.resource_id.startsWith('I-');
+                  const isRealAws = isRealEc2 || (res.tags && res.tags['AwsService']);
                   return (
                     <button
                       key={res.resource_id}
@@ -593,15 +595,27 @@ export const FailureSimulatorSection: React.FC<FailureSimulatorSectionProps> = (
                       onClick={() => setResourceId(res.resource_id)}
                       className={`p-3 rounded-lg border text-left transition-all font-mono ${
                         isSelected
-                          ? 'border-indigo-500 bg-indigo-950/30 shadow-md ring-1 ring-indigo-500'
+                          ? isRealEc2
+                            ? 'border-amber-500 bg-amber-950/30 shadow-md ring-1 ring-amber-500'
+                            : 'border-indigo-500 bg-indigo-950/30 shadow-md ring-1 ring-indigo-500'
                           : 'border-slate-800 bg-slate-950/60 hover:border-slate-700'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-bold text-slate-100">
+                        <span className="text-xs font-bold text-slate-100 truncate max-w-[130px]">
                           {res.resource_id}
                         </span>
-                        <span className="text-[10px] text-slate-500">{res.resource_type}</span>
+                        {isRealEc2 ? (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold">
+                            REAL EC2
+                          </span>
+                        ) : isRealAws ? (
+                          <span className="text-[9px] px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-semibold">
+                            REAL AWS
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-500">{res.resource_type}</span>
+                        )}
                       </div>
                       <StateBadge state={res.current_state} />
                     </button>

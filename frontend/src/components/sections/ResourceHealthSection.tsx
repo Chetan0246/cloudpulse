@@ -51,10 +51,10 @@ export const ResourceHealthSection: React.FC<ResourceHealthSectionProps> = ({
         <div>
           <h2 className="text-base font-bold text-slate-100 font-mono flex items-center space-x-2">
             <span>🖥️</span>
-            <span>Virtual Cloud Infrastructure Fleet</span>
+            <span>Cloud Infrastructure Fleet (Real AWS & Hybrid)</span>
           </h2>
           <p className="text-xs text-slate-400 mt-0.5">
-            Real-time simulated telemetry for compute, storage, API gateways, and database clusters.
+            Real-time telemetry and health monitoring across live AWS EC2, Lambda, DynamoDB, S3, and virtual resources.
           </p>
         </div>
 
@@ -152,6 +152,19 @@ export const ResourceHealthSection: React.FC<ResourceHealthSectionProps> = ({
                   resource.last_heartbeat
                 )}`}
               >
+                {/* Live AWS Resource Badge */}
+                {resource.resource_id.startsWith('I-') ? (
+                  <div className="mb-3 inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-mono font-semibold">
+                    <span>⚡</span>
+                    <span>LIVE AWS EC2 INSTANCE (ap-south-1)</span>
+                  </div>
+                ) : resource.tags && resource.tags['AwsService'] ? (
+                  <div className="mb-3 inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] font-mono font-semibold">
+                    <span>☁️</span>
+                    <span>AWS {resource.tags['AwsService']} (ap-south-1)</span>
+                  </div>
+                ) : null}
+
                 {/* Active failure notice */}
                 {resource.active_failure_type && (
                   <div className="mb-4 bg-rose-950/40 border border-rose-500/40 rounded-lg p-2.5 text-xs font-mono text-rose-300 flex items-center justify-between">

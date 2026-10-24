@@ -401,7 +401,14 @@ export const IncidentDetailSection: React.FC<IncidentDetailSectionProps> = ({
                       {act.status}
                     </span>
                   </div>
-                  <p className="text-slate-400">{act.outcome_message}</p>
+                  {act.outcome_message?.startsWith("Real AWS Action:") ? (
+                    <div className="bg-amber-500/10 border border-amber-500/30 rounded px-2.5 py-1.5 text-amber-300 font-semibold flex items-center space-x-2">
+                      <span className="text-sm">⚡</span>
+                      <span>{act.outcome_message}</span>
+                    </div>
+                  ) : (
+                    <p className="text-slate-400">{act.outcome_message}</p>
+                  )}
                   {act.error_detail && (
                     <p className="text-rose-400 text-[11px]">{act.error_detail}</p>
                   )}

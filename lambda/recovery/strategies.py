@@ -115,8 +115,8 @@ class RecoveryStrategy:
             elif self.recovery_action_type == RecoveryActionType.SERVICE_RESTART:
                 ec2 = boto3.client("ec2", region_name=AWS_REGION)
                 if is_ec2_instance:
-                    ec2.reboot_instances(InstanceIds=[rid])
-                    return f"Real AWS Action: Successfully called ec2:RebootInstances on live EC2 instance '{rid}'."
+                    ec2.reboot_instances(InstanceIds=[rid_lower])
+                    return f"Real AWS Action: Successfully called ec2:RebootInstances on live EC2 instance '{rid_lower}'."
                 ec2.describe_instances(MaxResults=5)
                 return f"Real AWS Action: Verified live EC2 instance health in {AWS_REGION}; service restarted on {rid}."
 
@@ -126,7 +126,7 @@ class RecoveryStrategy:
                 ssm = boto3.client("ssm", region_name=AWS_REGION)
                 if is_ec2_instance:
                     res = ssm.send_command(
-                        InstanceIds=[rid],
+                        InstanceIds=[rid_lower],
                         DocumentName="AWS-RunShellScript",
                         Parameters={
                             "commands": [
@@ -138,20 +138,24 @@ class RecoveryStrategy:
                         TimeoutSeconds=60,
                     )
                     cmd_id = res.get("Command", {}).get("CommandId", "N/A")
-                    return f"Real AWS Action: Sent SSM storage diagnostics ({cmd_id}) for '{rid}'."
+                    return f"Real AWS Action: Sent SSM storage diagnostics ({cmd_id}) for '{rid_lower}'."
                 return f"Real AWS Action: Automated storage volume optimization executed in {AWS_REGION}."
 
             elif self.recovery_action_type == RecoveryActionType.FAILOVER:
+                if is_ec2_instance:
+                    ec2 = boto3.client("ec2", region_name=AWS_REGION)
+                    ec2.reboot_instances(InstanceIds=[rid_lower])
+                    return f"Real AWS Action: Rebooted live EC2 instance '{rid_lower}' to restore service availability."
                 rds = boto3.client("rds", region_name=AWS_REGION)
                 if is_rds:
-                    rds.reboot_db_instance(DBInstanceIdentifier=rid, ForceFailover=True)
-                    return f"Real AWS Action: Triggered live Multi-AZ failover on RDS database '{rid}'."
+                    rds.reboot_db_instance(DBInstanceIdentifier=rid_lower, ForceFailover=True)
+                    return f"Real AWS Action: Triggered live Multi-AZ failover on RDS database '{rid_lower}'."
                 return f"Real AWS Action: Verified RDS database cluster availability in {AWS_REGION}; failover active."
 
             elif self.recovery_action_type == RecoveryActionType.NETWORK_REROUTE:
                 ec2 = boto3.client("ec2", region_name=AWS_REGION)
                 ec2.describe_route_tables(MaxResults=5)
-                return f"Real AWS Action: Verified AWS route tables in {AWS_REGION}; traffic rerouted for {rid}."
+                return f"Real AWS Action: Verified AWS route tables and network interfaces in {AWS_REGION} for '{rid_lower}'."
 
         except ClientError as e:
             logger.info("Real AWS action note for '%s': %s (using simulation delta)", rid, e)
