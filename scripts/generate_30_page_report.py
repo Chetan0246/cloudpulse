@@ -263,7 +263,7 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
         ["  4.5", "Windowed Reliability Calculator & Overlap Clamping Engine", "22"],
         ["  4.6", "React 18 + TypeScript Production Dashboard & Live Stepper", "23"],
         ["5.0", "Experimental Results, Verification & Benchmarking", "24"],
-        ["  5.1", "Automated Test Suite Verification (417 Verified Tests)", "24"],
+        ["  5.1", "Automated Test Suite Verification (422 Verified Tests)", "24"],
         ["  5.2", "Live 5-Scenario Chaos Injection & Remediation Traces", "25"],
         ["  5.3", "Performance Benchmarking & MTTR Reduction Analysis", "26"],
         ["  5.4", "Zero-Destruction Safety Governance Verification", "27"],
@@ -397,7 +397,7 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
     add_bullet("Enforce strict mathematical idempotency using DynamoDB atomic conditional expressions and a 7-stage Finite State Machine.")
     add_bullet("Implement Zero-Destruction Safety Governance via cryptographic allowlisting (REAL_AWS_ALLOWLIST) and read-only diagnostics.")
     add_bullet("Deliver a production React 18 + TypeScript single-page dashboard with real-time telemetry, live steppers, and analytics.")
-    add_bullet("Empirically validate system resilience through 417 automated tests and live chaos injections, proving sub-6-second MTTR.")
+    add_bullet("Empirically validate system resilience through 422 automated tests and live chaos injections, proving sub-6-second MTTR.")
 
     add_h2("1.3 Comprehensive Literature Survey (10 Reputed TR / IF Journals)")
     add_body(
@@ -456,7 +456,7 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
         ["Safety Governance", "None (No real infrastructure risk)", "REAL_AWS_ALLOWLIST + Non-Destructive Checks", "Cryptographic allowlisting prevents collateral damage"],
         ["DynamoDB Concurrency", "Unconditional put_item (race-prone)", "Atomic Conditional Writes (Optimistic Locking)", "Mathematically guarantees zero duplicate recoveries"],
         ["Reliability Calculation", "Stale cumulative aggregates in DynamoDB", "Dynamic Window Overlap Integrals (Clamped)", "Exact DAILY, WEEKLY, CUMULATIVE availability math"],
-        ["Automated Test Suite", "Basic unit tests (32 tests)", "417 Automated Tests (373 Backend + 49 Frontend)", "100% test pass rate with full CI/CD verification"],
+        ["Automated Test Suite", "Basic unit tests (32 tests)", "422 Automated Tests (373 Backend + 49 Frontend)", "100% test pass rate with full CI/CD verification"],
     ]
     add_table(v1_v2_headers, v1_v2_data, col_widths=[1.4, 1.8, 1.9, 1.7])
 
@@ -533,7 +533,7 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
         ["Frontend UI Engine", "React 18 / TypeScript / Vite", "React 18.2, TS 5.2, Vite 5.4", "Single-page responsive dashboard with real-time state"],
         ["Styling & Icons", "Tailwind CSS / Lucide-React", "Tailwind 3.4, Lucide 0.344", "Enterprise dark-mode UI with status color palettes"],
         ["Infrastructure as Code", "AWS SAM / AWS CloudFormation", "AWS SAM CLI 1.115.0", "Declarative template defining all 18 AWS cloud resources"],
-        ["Automated Testing", "Pytest / Vitest / Playwright", "Pytest 9.0, Vitest 2.1", "417 automated unit, integration, and E2E regression tests"],
+        ["Automated Testing", "Pytest / Vitest / Playwright", "Pytest 9.0, Vitest 2.1", "422 automated unit, integration, and E2E regression tests"],
     ]
     add_table(stack_headers, stack_data, col_widths=[1.5, 1.8, 1.4, 2.1])
 
@@ -830,17 +830,17 @@ def generate_report(output_docx="/home/chetan/cloudpulse/CloudPulse_Final_Review
 
     # ==================== CHAPTER 5 ====================
     add_h1("5.0 Experimental Results, Verification & Benchmarking", page_break=True)
-    add_h2("5.1 Automated Test Suite Verification (417 Verified Tests)")
-    add_body("Table 5.1 presents the test verification audit confirming 100% pass rates across all 37 test suites:")
+    add_h2("5.1 Automated Test Suite Verification (422 Verified Tests)")
+    add_body("Table 5.1 presents the test verification audit confirming 100% pass rates across all 42 test suites:")
     test_headers = ["Testing Tier & Scope", "Framework / Runner", "Test Files", "Tests Executed", "Passing Rate", "Execution Duration"]
     test_data = [
-        ["Root Integration & E2E Layer", "Pytest 9.0 (AsyncIO)", "tests/ (6 modules)", "95 Passed", "100.0%", "7.44s"],
-        ["Backend Unit, Domain & Lifecycle", "Pytest 9.0 / Moto", "backend/tests/ (14 modules)", "273 Passed (5 skipped)", "100.0%", "6.17s"],
+        ["Root Integration & E2E Layer", "Pytest 9.0 (AsyncIO)", "tests/ (10 modules)", "95 Passed", "100.0%", "6.71s"],
+        ["Backend Unit, Domain & Lifecycle", "Pytest 9.0 / Moto", "backend/tests/ (15 modules)", "278 Passed", "100.0%", "5.86s"],
         ["Static Type Checking", "Mypy 1.8", "backend/app/ (30 source files)", "30 Checked", "0 Issues (Clean)", "2.81s"],
-        ["Frontend UI, Hooks & Sections", "Vitest 2.1 / React Testing Lib", "frontend/src/tests/ (17 files)", "49 Passed", "100.0%", "4.82s"],
+        ["Frontend UI, Hooks & Sections", "Vitest 2.1 / React Testing Lib", "frontend/src/tests/ (17 files)", "49 Passed", "100.0%", "5.07s"],
         ["TypeScript Compiler & Bundler", "Tsc --noEmit && Vite Build", "Entire frontend/ tree", "109 modules", "100.0%", "1.64s"],
         ["Infrastructure Template Linter", "SAM Validate --lint", "infrastructure/template.yaml", "18 Resources", "Valid Template", "0.92s"],
-        ["Total Verification Footprint", "Unified Multi-Tier Harness", "37 Test Suites", "417 Tests Executed", "100.0% Pass Rate", "23.80s"],
+        ["Total Verification Footprint", "Unified Multi-Tier Harness", "42 Test Suites", "422 Tests Executed", "100.0% Pass Rate", "23.01s"],
     ]
     add_table(test_headers, test_data, col_widths=[1.8, 1.4, 1.3, 1.0, 1.0, 0.9])
 

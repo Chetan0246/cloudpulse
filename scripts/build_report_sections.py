@@ -21,7 +21,7 @@ ABSTRACT = (
     "instances (t3.micro running Amazon Linux 2023), live Auto Scaling Groups (asg-cloudpulse-fleet), dual-target "
     "Application Load Balancers (alb-cloudpulse-gw), Amazon RDS PostgreSQL databases (rds-cloudpulse-db), and AWS "
     "Systems Manager (SSM) agent run-commands. CloudPulse enforces strict Zero-Destruction Safety Governance through "
-    "cryptographic resource allowlisting (REAL_AWS_ALLOWLIST) and non-destructive diagnostic execution. Across 417 "
+    "cryptographic resource allowlisting (REAL_AWS_ALLOWLIST) and non-destructive diagnostic execution. Across 422 "
     "automated tests (373 backend integration/unit tests and 49 frontend Vitest suites) and live AWS chaos injections, "
     "CloudPulse achieves a 100% test pass rate, 0 unhandled dead-letter queue failures, and reduces incident MTTR "
     "from 45 minutes to under 5.8 seconds—an 87.1% reduction in downtime—while maintaining an operational cost "

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Chetan0246/cloudpulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Chetan0246/cloudpulse/actions/workflows/ci.yml)
 [![AWS](https://img.shields.io/badge/AWS-Serverless%20%2B%20Real%20Fleet-orange.svg)](https://aws.amazon.com/)
-[![Tests](https://img.shields.io/badge/Tests-417%20Passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-422%20Passed-brightgreen.svg)](tests/)
 [![MTTR](https://img.shields.io/badge/MTTR-4.8s%20Autonomous-blue.svg)](docs/RELIABILITY_METRICS.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -13,7 +13,7 @@
 > **Live Region:** AWS `ap-south-1` (Mumbai)  
 > **Live Dashboard:** [http://cloudpulse-frontend-583594224264-dev.s3-website.ap-south-1.amazonaws.com](http://cloudpulse-frontend-583594224264-dev.s3-website.ap-south-1.amazonaws.com)  
 > **Live API Gateway:** `https://s09bowmk08.execute-api.ap-south-1.amazonaws.com/dev`  
-> **Verification:** 417 Automated Tests (100% Pass) | 0 Type/Lint Errors | MTTR ≈ 4–5 s to dispatch  
+> **Verification:** 422 Automated Tests (100% Pass) | 0 Type/Lint Errors | MTTR ≈ 4–5 s to dispatch  
 > **Repository:** [github.com/Chetan0246/cloudpulse](https://github.com/Chetan0246/cloudpulse)
 
 ---
@@ -151,7 +151,7 @@ CloudPulse features a dual-mode execution engine configurable via environment va
 | **REST API Gateway** | `cloudpulse-api-dev` (HTTP API v2) | `https://s09bowmk08.execute-api.ap-south-1.amazonaws.com/dev` |
 | **EC2 Worker Node** | `i-083e8c6b1fc9ca0b7` (`t3.micro`, Amazon Linux 2023) | Public IP: `13.232.107.101` (`ap-south-1a`) |
 | **Auto Scaling Group** | `asg-cloudpulse-fleet` (1–3 instances) | AWS Auto Scaling in `ap-south-1` |
-| **Application Load Balancer** | `alb-cloudpulse-gw` | `alb-cloudpulse-gw-174842867.ap-south-1.elb.amazonaws.com` |
+| **Application Load Balancer** | `alb-cloudpulse-gw` (primary + standby target groups) | [http://alb-cloudpulse-gw-174842867.ap-south-1.elb.amazonaws.com](http://alb-cloudpulse-gw-174842867.ap-south-1.elb.amazonaws.com) (healthy target, HTTP 200) |
 | **Amazon RDS Database** | `rds-cloudpulse-db` (PostgreSQL 16, `db.t4g.micro`) | Port `5432` in VPC Private Subnet |
 | **DynamoDB State Tables** | `cloudpulse-resources-dev`, `cloudpulse-incidents-dev` | On-Demand Billing (regional service) |
 | **Alerting & Dead-Letter** | SNS `cloudpulse-alerts`, SQS `cloudpulse-recovery-dlq` | Operational notification fan-out |
@@ -172,16 +172,16 @@ CloudPulse calculates pure mathematical reliability indicators derived directly 
 
 ## 7. Automated Test Suite & Verification Results
 
-CloudPulse maintains a comprehensive **417-test automated verification suite** spanning unit, integration, and end-to-end tests:
+CloudPulse maintains a comprehensive **422-test automated verification suite** spanning unit, integration, and end-to-end tests:
 
 ```bash
 # 1. Run root integration & system test suite (95 tests)
 pytest tests/ -v
 # Result: 95 passed (100% pass)
 
-# 2. Run backend domain & service test suite (273 tests)
+# 2. Run backend domain & service test suite (278 tests)
 cd backend && pytest tests/ -v
-# Result: 273 passed, 5 skipped (100% pass)
+# Result: 278 passed (100% pass)
 
 # 3. Run frontend Vitest suite (49 tests across 17 test files)
 cd frontend && npm test -- --run
@@ -203,13 +203,13 @@ sam validate -t infrastructure/template.yaml --lint
 | Verification Check | Target Component | Result |
 | :--- | :--- | :--- |
 | **Root Integration Suite** | Root `tests/` directory | **95 Passed** |
-| **Backend Unit & Domain Suite** | `backend/tests/` | **273 Passed** (5 skipped) |
+| **Backend Unit & Domain Suite** | `backend/tests/` | **278 Passed** |
 | **Frontend Component Suite** | `frontend/src/tests/` | **49 Passed** (17 files) |
 | **TypeScript Type Check** | `tsc --noEmit` | **0 Errors** |
 | **Python Static Type Check** | `mypy app/` (30 files) | **0 Errors** |
 | **Frontend Production Build** | `vite build` | **Clean Build** (index-ZchiexRE.js) |
 | **SAM Template Linting** | `sam validate --lint` | **Valid Template** |
-| **Total Automated Tests** | **Full System Coverage** | **417 Tests (100% Green)** |
+| **Total Automated Tests** | **Full System Coverage** | **422 Tests (100% Green)** |
 
 ---
 
@@ -231,6 +231,13 @@ curl -X POST https://s09bowmk08.execute-api.ap-south-1.amazonaws.com/dev/simulat
 
 # Graceful fleet teardown (to conserve AWS free credits)
 python scripts/manage_real_aws.py teardown-fleet
+```
+
+If an FS-04 (`NETWORK_LATENCY`) remediation has moved the ALB listener to the
+standby target group, restore the public primary path with:
+
+```bash
+./scripts/restore_demo_alb.sh
 ```
 
 ---
@@ -260,14 +267,14 @@ npm run dev
 
 ## 10. Course Project Submission Deliverables
 
-- **Final Review Course Project Submission Document (.docx):**  
-  [CloudPulse_Final_Review.docx](file:///home/chetan/cloudpulse/CloudPulse_Final_Review.docx)
-- **Final Review Course Project Submission Document (.pdf):**  
-  [CloudPulse_Final_Review.pdf](file:///home/chetan/cloudpulse/CloudPulse_Final_Review.pdf)
-- **Real AWS Implementation Whitepaper:**  
-  [docs/CLOUDPULSE_V2_REAL_AWS.md](file:///home/chetan/cloudpulse/docs/CLOUDPULSE_V2_REAL_AWS.md)
-- **Architecture Reference:**  
-  [ARCHITECTURE.md](file:///home/chetan/cloudpulse/ARCHITECTURE.md)
+- **Final Review Course Project Submission (DOCX):** [CloudPulse_Final_Review.docx](./CloudPulse_Final_Review.docx)
+- **Final Review Course Project Submission (PDF):** [CloudPulse_Final_Review.pdf](./CloudPulse_Final_Review.pdf)
+- **Full Technical Report (PDF):** [CloudPulse_Final_Review_Report.pdf](./CloudPulse_Final_Review_Report.pdf)
+- **Review II Submission Archive (PDF):** [docs/REVIEW_2/CloudPulse_Review_II.pdf](./docs/REVIEW_2/CloudPulse_Review_II.pdf)
+- **Review II Submission Source (DOCX):** [docs/REVIEW_2/CloudPulse_Review_II_source.docx](./docs/REVIEW_2/CloudPulse_Review_II_source.docx)
+- **Empirical Verification Appendix:** [docs/VERIFICATION_APPENDIX.md](./docs/VERIFICATION_APPENDIX.md)
+- **Real AWS Implementation Whitepaper:** [docs/CLOUDPULSE_V2_REAL_AWS.md](./docs/CLOUDPULSE_V2_REAL_AWS.md)
+- **Architecture Reference:** [ARCHITECTURE.md](./ARCHITECTURE.md)
 
 ---
 
