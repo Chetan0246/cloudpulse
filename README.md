@@ -13,14 +13,14 @@
 > **Live Region:** AWS `ap-south-1` (Mumbai)  
 > **Live Dashboard:** [http://cloudpulse-frontend-583594224264-dev.s3-website.ap-south-1.amazonaws.com](http://cloudpulse-frontend-583594224264-dev.s3-website.ap-south-1.amazonaws.com)  
 > **Live API Gateway:** `https://s09bowmk08.execute-api.ap-south-1.amazonaws.com/dev`  
-> **Verification:** 417 Automated Tests (100% Pass) | 0 Type/Lint Errors | Sub-5s MTTR  
+> **Verification:** 417 Automated Tests (100% Pass) | 0 Type/Lint Errors | MTTR ≈ 4–5 s to dispatch  
 > **Repository:** [github.com/Chetan0246/cloudpulse](https://github.com/Chetan0246/cloudpulse)
 
 ---
 
 ## 1. What is CloudPulse?
 
-**CloudPulse** is an enterprise-grade autonomous cloud reliability platform and self-healing control plane deployed on Amazon Web Services (AWS). Unlike traditional monitoring tools that merely detect failures and notify human engineers, CloudPulse achieves **true closed-loop autonomic resilience**: it monitors real AWS workloads, detects metric anomalies and service degradations in real time, routes lifecycle events through an asynchronous bus, and executes **genuine AWS SDK (`boto3`) remediation operations**—all with zero human latency.
+**CloudPulse** is an enterprise-grade autonomous cloud reliability platform and self-healing control plane deployed on Amazon Web Services (AWS). Unlike traditional monitoring tools that merely detect failures and notify human engineers, CloudPulse achieves **true closed-loop autonomic resilience**: it monitors real AWS workloads, detects metric anomalies and service degradations in real time, routes lifecycle events through an asynchronous bus, and executes **genuine AWS SDK (`boto3`) remediation operations**—with no human in the loop.
 
 $$\text{Real AWS Workload} \longrightarrow \text{Anomaly Detection} \longrightarrow \text{Event Routing} \longrightarrow \text{Autonomous AWS SDK Remediation} \longrightarrow \text{Full Recovery \& Audit}$$
 
@@ -51,11 +51,11 @@ CloudPulse manages and repairs a **live fleet of real AWS infrastructure resourc
 
 | Target Real AWS Resource | AWS Service | Hardware / Capacity Specs | Real AWS SDK Action Dispatched | Live AWS Verification |
 | :--- | :--- | :--- | :--- | :--- |
-| **`i-083e8c6b1fc9ca0b7`** | **Amazon EC2** | `t3.micro` (Amazon Linux 2023), Public IP: `13.232.107.101` | `ec2.reboot_instances(InstanceIds=[...])` | Hypervisor-level reboot verified via EC2 Console & CloudTrail. |
-| **`asg-cloudpulse-fleet`** | **Auto Scaling** | Capacity: Min=1, Max=3, Desired=2 | `asg.set_desired_capacity(DesiredCapacity=current+1)` | Elastic horizontal scale-out; dynamically provisions compute. |
-| **`alb-cloudpulse-gw`** | **Load Balancer** | Dual Target Groups (`tg-primary`, `tg-standby`) | `elbv2.modify_listener(...)` / target deregistration | Automatic traffic diversion away from degraded AZ targets. |
-| **`rds-cloudpulse-db`** | **Amazon RDS** | PostgreSQL 16 on `db.t4g.micro`, Port 5432 | `rds.reboot_db_instance(ForceFailover=True)` | Multi-AZ database failover reboot; status: `rebooting`. |
-| **`SSM Agent Integration`** | **Systems Manager**| Managed Instance Node (`AWS-RunShellScript`) | `ssm.send_command(DocumentName='AWS-RunShellScript')` | Remote diagnostics (`df -h`, `journalctl`) & automated disk cleanup. |
+| **`i-083e8c6b1fc9ca0b7`** | **Amazon EC2** | `t3.micro` (Amazon Linux 2023), Public IP: `13.232.107.101` | `ec2.reboot_instances(InstanceIds=[...])` | `RebootInstances` call recorded in CloudTrail (event c7a91e34-…). |
+| **`asg-cloudpulse-fleet`** | **Auto Scaling** | Capacity: Min=1, Max=3, Desired=2 | `asg.set_desired_capacity(DesiredCapacity=current+1, HonorCooldown=True)` | Desired capacity raised by one; the ASG then launches an instance. |
+| **`alb-cloudpulse-gw`** | **Load Balancer** | Dual Target Groups (`tg-primary`, `tg-standby`) | `elbv2.modify_listener(...)` (first listener → `tg-cloudpulse-standby`) | Listener default action switched; target health is not checked. |
+| **`rds-cloudpulse-db`** | **Amazon RDS** | PostgreSQL 16 on `db.t4g.micro`, Port 5432 | `rds.reboot_db_instance(ForceFailover=True)`, plain reboot if that call errors | Reboot recorded in an incident ("rebooted live RDS database"). Multi-AZ failover is not evidenced. |
+| **`SSM Agent Integration`** | **Systems Manager**| Managed Instance Node (`AWS-RunShellScript`) | `ssm.send_command(DocumentName='AWS-RunShellScript')` | Read-only diagnostics (`df -h`, `du -sh /tmp /var/log`, `journalctl --disk-usage`); nothing is deleted. |
 
 ---
 
@@ -83,9 +83,9 @@ flowchart TD
     subgraph Remediation ["3. Live AWS Infrastructure Remediation"]
         EC2_ACT["EC2 Reboot<br/>ec2:RebootInstances"]
         ASG_ACT["ASG Scale-Out<br/>autoscaling:SetDesiredCapacity"]
-        SSM_ACT["SSM Diagnostic & Clean<br/>ssm:SendCommand"]
+        SSM_ACT["SSM Diagnostics (read-only)<br/>ssm:SendCommand"]
         ALB_ACT["ALB Target Reroute<br/>elbv2:ModifyListener"]
-        RDS_ACT["RDS Failover Reboot<br/>rds:RebootDBInstance"]
+        RDS_ACT["RDS Reboot (ForceFailover, plain-reboot fallback)<br/>rds:RebootDBInstance"]
         
         AUTH -->|FS-01: High CPU| ASG_ACT
         AUTH -->|FS-02: Process Crash| EC2_ACT
@@ -97,9 +97,9 @@ flowchart TD
     subgraph Observability ["4. Audit & Alert Broadcast"]
         DDB[("Amazon DynamoDB<br/>Incident History Table")]
         SNS["Amazon SNS<br/>(Email / SMS Topic)"]
-        S3["React 19 Console<br/>(Live SRE Dashboard)"]
+        S3["React 18 Console<br/>(Live SRE Dashboard)"]
         
-        LAMBDA -->|Commit 14-Field Audit| DDB
+        LAMBDA -->|Commit Incident + Audit Record| DDB
         LAMBDA -->|Publish Ops Alert| SNS
         DDB -->|Adaptive Sync| S3
     end
@@ -107,24 +107,24 @@ flowchart TD
 
 1. **FS-01: High CPU Utilization on EC2 / ASG**
    - *Anomaly:* Compute load spikes above 85% threshold.
-   - *Autonomous Action:* Evaluates current cluster capacity and triggers `autoscaling:SetDesiredCapacity(DesiredCapacity=current+1)` or `ec2:RebootInstances`.
-   - *Outcome:* New compute instance launched; load normalized.
+   - *Autonomous Action:* Evaluates current cluster capacity and triggers `autoscaling:SetDesiredCapacity(DesiredCapacity=current+1)` on an allow-listed ASG (for a non-ASG ID only a read-only describe call runs).
+   - *Outcome:* Desired capacity raised; the ASG launches the instance. Load recovery is not verified by the code.
 2. **FS-02: Microservice Crash / Process Failure**
    - *Anomaly:* Application daemon or HTTP service terminates unexpectedly.
-   - *Autonomous Action:* Dispatches `ec2:RebootInstances` to restore instance health or triggers SSM service recovery.
-   - *Outcome:* Machine rebooted; processes restored to `HEALTHY`.
+   - *Autonomous Action:* Dispatches `ec2:RebootInstances` on an allow-listed instance. There is no SSM service-restart path.
+   - *Outcome:* Instance reboot requested; the incident is marked recovered when the call returns (no process/endpoint probe).
 3. **FS-03: Storage & Memory Exhaustion**
    - *Anomaly:* Disk utilization reaches critical threshold (>90%).
-   - *Autonomous Action:* Invokes `ssm:SendCommand` running `AWS-RunShellScript` to collect storage diagnostics and execute automated disk log reclamation.
-   - *Outcome:* Storage utilization reclaimed; verified via SSM Command ID.
+   - *Autonomous Action:* Invokes `ssm:SendCommand` running `AWS-RunShellScript` to run read-only diagnostics (`df -h`, `du -sh /tmp /var/log`, `journalctl --disk-usage`). No files are deleted and the command output is not read back.
+   - *Outcome:* SSM Command ID recorded. Storage is not reclaimed by this action.
 4. **FS-04: Network Latency & Unhealthy Target**
    - *Anomaly:* Target response time degrades beyond 500ms or health check fails.
-   - *Autonomous Action:* Reroutes listener traffic from `tg-primary` to healthy `tg-standby` target group.
-   - *Outcome:* Ingress traffic rerouted with zero dropped requests.
+   - *Autonomous Action:* Switches the first listener of `alb-cloudpulse-gw` to `tg-cloudpulse-standby` (names hard-coded); target health is not checked.
+   - *Outcome:* Listener default action changed. Dropped-request behaviour was not measured.
 5. **FS-05: Database Downtime / Connection Exhaustion**
    - *Anomaly:* PostgreSQL database connectivity failure or connection saturation.
-   - *Autonomous Action:* Calls `rds:RebootDBInstance(DBInstanceIdentifier=..., ForceFailover=True)`.
-   - *Outcome:* Database fails over to healthy replica; connection restored.
+   - *Autonomous Action:* Calls `rds:RebootDBInstance(..., ForceFailover=True)`; if that call raises (e.g. single-AZ instance) it retries a plain reboot.
+   - *Outcome:* Reboot requested. Failover to a replica and restored connectivity are not verified.
 
 ---
 
@@ -139,7 +139,7 @@ CloudPulse features a dual-mode execution engine configurable via environment va
 
 > [!IMPORTANT]
 > **Zero-Destruction Safety Policy:**  
-> The Recovery Lambda validates every resource ID against `REAL_AWS_ALLOWLIST` before executing any mutating AWS SDK call. Any request targeting an unapproved resource is immediately rejected, guaranteeing **zero accidental disruption** to untargeted AWS infrastructure.
+> The Recovery Lambda validates every resource ID against `REAL_AWS_ALLOWLIST` before executing any mutating AWS SDK call. A request targeting an unapproved resource falls back to simulation only (no AWS call is made), so untargeted infrastructure is not touched by the recovery engine. The IAM policy itself is on `Resource: "*"`, so the allow-list is a code-level control.
 
 ---
 
@@ -153,7 +153,7 @@ CloudPulse features a dual-mode execution engine configurable via environment va
 | **Auto Scaling Group** | `asg-cloudpulse-fleet` (1–3 instances) | AWS Auto Scaling in `ap-south-1` |
 | **Application Load Balancer** | `alb-cloudpulse-gw` | `alb-cloudpulse-gw-174842867.ap-south-1.elb.amazonaws.com` |
 | **Amazon RDS Database** | `rds-cloudpulse-db` (PostgreSQL 16, `db.t4g.micro`) | Port `5432` in VPC Private Subnet |
-| **DynamoDB State Tables** | `cloudpulse-resources-dev`, `cloudpulse-incidents-dev` | On-Demand Billing, Multi-AZ Replication |
+| **DynamoDB State Tables** | `cloudpulse-resources-dev`, `cloudpulse-incidents-dev` | On-Demand Billing (regional service) |
 | **Alerting & Dead-Letter** | SNS `cloudpulse-alerts`, SQS `cloudpulse-recovery-dlq` | Operational notification fan-out |
 
 ---
@@ -164,7 +164,7 @@ CloudPulse calculates pure mathematical reliability indicators derived directly 
 
 - **Sliding-Window Availability ($A_{window}$):**
   $$A_{window} = \frac{T_{window} - \sum T_{down, overlap}}{T_{window}} \times 100\%$$
-- **Mean Time to Recovery (MTTR):** Average elapsed seconds between incident trigger and completed recovery (measured at **4.8s** across all 5 live failure scenarios).
+- **Mean Time to Recovery (MTTR):** Average elapsed seconds between incident trigger and completed recovery (computed from `detected_at` → `resolved_at`; recorded when the AWS call returns, not when the service is healthy; one captured RDS incident: 3.69 s; state the sample size and window behind the 4.8 s average).
 - **Mean Time Between Failures (MTBF):** $\text{MTBF} = \frac{T_{operational} - T_{downtime}}{\text{Number of Failures}}$
 - **Recovery Success Rate ($R_{success}$):** Percentage of automated recovery attempts successfully restored without manual escalation.
 
