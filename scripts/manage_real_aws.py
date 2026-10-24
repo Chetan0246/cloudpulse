@@ -312,10 +312,165 @@ def register_real_fleet(instance_id: str | None = None):
     print("\n✅ Real AWS fleet successfully registered and tracked!\n")
 
 
+def status_real_fleet():
+    """Display real-time operational status of all real AWS workloads."""
+    ensure_aws_credentials()
+    print(f"\n=======================================================")
+    print(f"   CloudPulse v2 — Real AWS Fleet Status ({REGION})")
+    print(f"=======================================================\n")
+
+    # 1. EC2
+    ec2 = boto3.client("ec2", region_name=REGION)
+    try:
+        res = ec2.describe_instances(
+            Filters=[
+                {"Name": "tag:Project", "Values": ["CloudPulse"]},
+                {"Name": "instance-state-name", "Values": ["running", "pending", "stopped"]},
+            ]
+        )
+        print("💻 EC2 Compute:")
+        instances = [i for r in res.get("Reservations", []) for i in r.get("Instances", [])]
+        if instances:
+            for i in instances:
+                print(f"   • Instance ID: {i['InstanceId']} ({i['InstanceType']})")
+                print(f"     State:       {i['State']['Name']}")
+                print(f"     Public IP:   {i.get('PublicIpAddress', 'N/A')}")
+        else:
+            print("   • No active CloudPulse EC2 instances.")
+    except Exception as e:
+        print(f"   [EC2 Error]: {e}")
+
+    # 2. Auto Scaling Group
+    asg = boto3.client("autoscaling", region_name=REGION)
+    try:
+        res = asg.describe_auto_scaling_groups(AutoScalingGroupNames=["asg-cloudpulse-fleet"])
+        print("\n📈 Auto Scaling Fleet:")
+        groups = res.get("AutoScalingGroups", [])
+        if groups:
+            g = groups[0]
+            print(f"   • ASG Name:    {g['AutoScalingGroupName']}")
+            print(f"     Capacity:    Desired: {g['DesiredCapacity']} | Min: {g['MinSize']} | Max: {g['MaxSize']}")
+            print(f"     Instances:   {[i['InstanceId'] for i in g.get('Instances', [])]}")
+        else:
+            print("   • 'asg-cloudpulse-fleet' not found.")
+    except Exception as e:
+        print(f"   [ASG Error]: {e}")
+
+    # 3. Application Load Balancer
+    elbv2 = boto3.client("elbv2", region_name=REGION)
+    try:
+        lbs = elbv2.describe_load_balancers(Names=["alb-cloudpulse-gw"])
+        print("\n🔀 Application Load Balancer:")
+        if lbs.get("LoadBalancers"):
+            lb = lbs["LoadBalancers"][0]
+            print(f"   • ALB Name:    {lb['LoadBalancerName']}")
+            print(f"     DNS Name:    {lb['DNSName']}")
+            print(f"     State:       {lb['State']['Code']}")
+            listeners = elbv2.describe_listeners(LoadBalancerArn=lb["LoadBalancerArn"]).get("Listeners", [])
+            if listeners:
+                tg_arn = listeners[0]["DefaultActions"][0].get("TargetGroupArn", "N/A")
+                tg_name = tg_arn.split("/")[-2] if "/" in tg_arn else tg_arn
+                print(f"     Active TG:   {tg_name}")
+        else:
+            print("   • 'alb-cloudpulse-gw' not found.")
+    except Exception as e:
+        print(f"   [ALB Error]: {e}")
+
+    # 4. RDS Database
+    rds = boto3.client("rds", region_name=REGION)
+    try:
+        res = rds.describe_db_instances(DBInstanceIdentifier="rds-cloudpulse-db")
+        print("\n🗄️ Relational Database Service (RDS):")
+        dbs = res.get("DBInstances", [])
+        if dbs:
+            d = dbs[0]
+            endpoint = d.get("Endpoint", {}).get("Address", "Provisioning...")
+            print(f"   • Identifier:  {d['DBInstanceIdentifier']} ({d['Engine']} {d['EngineVersion']})")
+            print(f"     Class:       {d['DBInstanceClass']}")
+            print(f"     Status:      {d['DBInstanceStatus']}")
+            print(f"     Endpoint:    {endpoint}")
+        else:
+            print("   • 'rds-cloudpulse-db' not found.")
+    except Exception as e:
+        print(f"   [RDS Error]: {e}")
+
+    # 5. CloudPulse DynamoDB Table
+    print("\n⚡ CloudPulse Control Plane DynamoDB Registry:")
+    try:
+        table = get_dynamo_table()
+        items = table.scan().get("Items", [])
+        for item in sorted(items, key=lambda x: str(x.get("resource_id"))):
+            rid = item.get("resource_id")
+            rtype = item.get("resource_type")
+            state = item.get("current_state")
+            health = item.get("health_status")
+            print(f"   • {rid:25} [{rtype:7}] -> State: {state:16} | Health: {health}")
+    except Exception as e:
+        print(f"   [DynamoDB Error]: {e}")
+
+    print("\n" + "=" * 55 + "\n")
+
+
+def teardown_real_fleet():
+    """Gracefully terminate all real AWS workload resources (ALB, ASG, RDS, EC2)."""
+    ensure_aws_credentials()
+    print("\n🛑 Initiating full teardown of real AWS workload resources...")
+
+    # 1. ASG
+    asg = boto3.client("autoscaling", region_name=REGION)
+    try:
+        print("   • Updating Auto Scaling Group 'asg-cloudpulse-fleet' to capacity 0...")
+        asg.update_auto_scaling_group(AutoScalingGroupName="asg-cloudpulse-fleet", MinSize=0, DesiredCapacity=0)
+        asg.delete_auto_scaling_group(AutoScalingGroupName="asg-cloudpulse-fleet", ForceDelete=True)
+        print("   ✅ ASG deleted.")
+    except Exception as e:
+        print(f"   [ASG Note]: {e}")
+
+    # 2. ALB
+    elbv2 = boto3.client("elbv2", region_name=REGION)
+    try:
+        lbs = elbv2.describe_load_balancers(Names=["alb-cloudpulse-gw"]).get("LoadBalancers", [])
+        for lb in lbs:
+            arn = lb["LoadBalancerArn"]
+            print(f"   • Deleting ALB '{lb['LoadBalancerName']}'...")
+            elbv2.delete_load_balancer(LoadBalancerArn=arn)
+            print("   ✅ ALB deleted.")
+    except Exception as e:
+        print(f"   [ALB Note]: {e}")
+
+    # 3. RDS
+    rds = boto3.client("rds", region_name=REGION)
+    try:
+        print("   • Deleting RDS database 'rds-cloudpulse-db' (SkipFinalSnapshot=True)...")
+        rds.delete_db_instance(DBInstanceIdentifier="rds-cloudpulse-db", SkipFinalSnapshot=True)
+        print("   ✅ RDS deletion initiated.")
+    except Exception as e:
+        print(f"   [RDS Note]: {e}")
+
+    # 4. EC2 Demo Instances
+    teardown_demo_ec2()
+
+    # 5. Launch Template
+    ec2 = boto3.client("ec2", region_name=REGION)
+    try:
+        ec2.delete_launch_template(LaunchTemplateName="lt-cloudpulse-worker")
+        print("   ✅ Launch Template deleted.")
+    except Exception as e:
+        print(f"   [Launch Template Note]: {e}")
+
+    print("\n✅ All real AWS workload services teardown initiated.\n")
+
+
 def main():
     ensure_aws_credentials()
     parser = argparse.ArgumentParser(description="CloudPulse Real AWS Integration CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # status
+    subparsers.add_parser("status", help="Display real-time operational status of real AWS fleet")
+
+    # teardown-fleet
+    subparsers.add_parser("teardown-fleet", help="Terminate all real AWS workloads (ALB, ASG, RDS, EC2)")
 
     # discover
     subparsers.add_parser("discover", help="Discover live AWS resources in the region")
@@ -348,7 +503,11 @@ def main():
 
     args = parser.parse_args()
 
-    if args.command == "discover":
+    if args.command == "status":
+        status_real_fleet()
+    elif args.command == "teardown-fleet":
+        teardown_real_fleet()
+    elif args.command == "discover":
         discover_live_aws_resources()
     elif args.command == "provision-demo-ec2":
         provision_demo_ec2()

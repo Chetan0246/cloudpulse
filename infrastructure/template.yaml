@@ -898,6 +898,14 @@ Resources:
                   - ssm:DescribeInstanceInformation
                   - rds:DescribeDBInstances
                   - rds:RebootDBInstance
+                  - elasticloadbalancing:DescribeLoadBalancers
+                  - elasticloadbalancing:DescribeTargetGroups
+                  - elasticloadbalancing:DescribeTargetHealth
+                  - elasticloadbalancing:DescribeListeners
+                  - elasticloadbalancing:ModifyListener
+                  - elasticloadbalancing:ModifyRule
+                  - elasticloadbalancing:DeregisterTargets
+                  - elasticloadbalancing:RegisterTargets
                 Resource: "*"
 
 # ──────────────────────────────────────────────────────────────────────────────
