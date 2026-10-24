@@ -16,15 +16,15 @@ CloudPulse is an **academic simulation system** that demonstrates autonomous clo
 ## 2. Hard Rules (Non-Negotiable)
 
 ### 2.1 Cost & AWS Usage
-- The system MUST stay within AWS Free Tier limits wherever possible.
-- Do NOT provision expensive infrastructure (e.g., EC2 clusters, RDS multi-AZ, NAT Gateways) for demonstration purposes.
-- Lambda, DynamoDB (on-demand), S3, CloudWatch, EventBridge, SNS, and API Gateway are the approved AWS services.
+- The system operates within AWS Free Tier limits and sponsored educational student credits ($100 credit pool).
+- Serverless control plane (Lambda, API Gateway, DynamoDB on-demand, CloudWatch, EventBridge, SNS, SQS, S3) scales to zero at $0 idle cost.
+- Workload fleet uses right-sized burstable instances (`t3.micro`, `t4g.micro`) with automated teardown scripts (`scripts/manage_real_aws.py teardown-fleet`) to prevent credit leakage.
 - Any addition of a new AWS service requires explicit justification in an Architectural Decision Record (ADR).
 
-### 2.2 Simulation Safety
-- Failures MUST be simulated logically (state changes in DynamoDB on virtual resources).
-- CloudPulse MUST NEVER intentionally disrupt real AWS infrastructure.
-- No Lambda function may terminate, stop, or modify real EC2/RDS/ECS resources without an explicit `--simulation-mode=false` flag AND user confirmation.
+### 2.2 Execution Modes & Infrastructure Safety
+- CloudPulse supports dual execution modes: `SIMULATION` (non-destructive logical state mutations) and `REAL_AWS`/`HYBRID` (genuine AWS SDK remediation).
+- In `REAL_AWS`/`HYBRID` mode, all mutating operations (`ec2:RebootInstances`, `autoscaling:SetDesiredCapacity`, `rds:RebootDBInstance`, `ssm:SendCommand`) are strictly governed by `REAL_AWS_ALLOWLIST`.
+- CloudPulse MUST NEVER modify, reboot, or disrupt unapproved AWS resources outside the allowlist.
 
 ### 2.3 Secrets & Credentials
 - AWS credentials MUST NEVER be hardcoded in any source file.

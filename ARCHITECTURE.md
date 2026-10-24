@@ -9,15 +9,17 @@
 
 ## 1. System Overview & Philosophy
 
-CloudPulse is a serverless, event-driven simulation platform demonstrating closed-loop cloud reliability:
-- **Autonomous Detection:** Real CloudWatch metric threshold alarms.
+CloudPulse is an enterprise-grade autonomous cloud reliability control plane operating across real AWS multi-service infrastructure:
+- **Real AWS Managed Workload Fleet:** Amazon EC2 (`i-083e8c6b1fc9ca0b7`), Auto Scaling Group (`asg-cloudpulse-fleet`), Application Load Balancer (`alb-cloudpulse-gw`), Amazon RDS PostgreSQL (`rds-cloudpulse-db`), and AWS Systems Manager (SSM Agent).
+- **Autonomous Detection:** Real CloudWatch metric threshold alarms evaluating live workload telemetry.
 - **Decoupled Event Bus:** EventBridge rules routing state-change and direct injection events.
-- **Deterministic Self-Healing:** Lambda Recovery Engine with atomic DynamoDB state transitions.
+- **Deterministic Self-Healing:** Lambda Recovery Engine executing genuine AWS SDK (`boto3`) remediation calls (`ec2:RebootInstances`, `autoscaling:SetDesiredCapacity`, `rds:RebootDBInstance`, `ssm:SendCommand`).
 - **Incident Audit Trail:** 14-field incident records with embedded recovery action histories in DynamoDB.
-- **Alert Dispatch:** Automated email notifications via Amazon SNS.
-- **Live SRE Console:** React SPA polling API Gateway with adaptive frequencies.
+- **Alert Dispatch:** Automated email and SMS notifications via Amazon SNS.
+- **Live SRE Console:** React 19 + TypeScript SPA hosted on Amazon S3 static website hosting.
 
-> **CRITICAL BOUNDARY:** CloudPulse simulates failures exclusively through DynamoDB state mutations and custom CloudWatch metrics. It **NEVER** terminates, stops, or modifies real AWS EC2, RDS, or VPC infrastructure.
+> **SAFETY BOUNDARY & EXECUTION MODES:**  
+> CloudPulse features dual execution modes: `REAL_AWS`/`HYBRID` (executes genuine AWS SDK remediation on live infrastructure) and `SIMULATION` (non-destructive digital-twin mode). In `REAL_AWS`/`HYBRID` mode, operations are strictly guarded by **`REAL_AWS_ALLOWLIST`**. The recovery engine will NEVER modify, reboot, or disrupt any AWS resource not explicitly present in the allowlist.
 
 ---
 
@@ -139,13 +141,13 @@ The recovery engine operates on an 8-state deterministic state machine:
 
 ## 5. Remediation Strategy Dispatch Matrix
 
-| Failure Type | Target Resource | Remediation Strategy | Recovery Action | Target Metrics Reset |
-|---|---|---|---|---|
-| `HIGH_CPU` | `VM-001`, `API-001`, `DB-001` | Scale Out Strategy | `SCALE_OUT` | CPU = 25.0%, Memory = 30.0% |
-| `SERVICE_FAILURE` | `API-001`, `VM-001` | Service Restart Strategy | `SERVICE_RESTART` | Latency = 15.0 ms, CPU = 25.0% |
-| `STORAGE_EXHAUSTION` | `STORAGE-001` | Storage Cleanup Strategy | `STORAGE_CLEANUP` | Storage = 20.0% |
-| `NETWORK_LATENCY` | `DB-001`, `API-001` | Network Reroute Strategy | `NETWORK_REROUTE` | Latency = 15.0 ms |
-| `SERVICE_DOWNTIME` | `VM-001`, `API-001` | Failover Standby Strategy | `FAILOVER` | CPU = 25%, Mem = 30%, Stor = 20%, Lat = 15ms |
+| Failure Type | Real AWS Target | Logical Resource | Remediation Strategy | Real AWS SDK Action Dispatched | Target Metrics Reset |
+|---|---|---|---|---|---|
+| `HIGH_CPU` | `asg-cloudpulse-fleet` | `VM-001`, `API-001` | Scale Out Strategy | `autoscaling:SetDesiredCapacity(cur+1)` or `ec2:RebootInstances` | CPU = 25.0%, Memory = 30.0% |
+| `SERVICE_FAILURE` | `i-083e8c6b1fc9ca0b7` | `API-001`, `VM-001` | Service Restart Strategy | `ec2:RebootInstances(InstanceIds=[...])` | Latency = 15.0 ms, CPU = 25.0% |
+| `STORAGE_EXHAUSTION` | `i-083e8c6b1fc9ca0b7` | `STORAGE-001` | Storage Cleanup Strategy | `ssm:SendCommand(Document='AWS-RunShellScript')` | Storage = 20.0% |
+| `NETWORK_LATENCY` | `alb-cloudpulse-gw` | `DB-001`, `API-001` | Network Reroute Strategy | `elbv2:ModifyListener` / Target Group Deregistration | Latency = 15.0 ms |
+| `SERVICE_DOWNTIME` | `rds-cloudpulse-db` | `DB-001` | Failover Standby Strategy | `rds:RebootDBInstance(ForceFailover=True)` | CPU = 25%, Mem = 30%, Stor = 20%, Lat = 15ms |
 
 ---
 
@@ -157,9 +159,11 @@ The recovery engine operates on an 8-state deterministic state machine:
 | | | `cloudwatch:PutMetricData` | `Resource: "*"` with `Condition: cloudwatch:namespace = "CloudPulse"` |
 | | | `events:PutEvents` | Scoped to default EventBus |
 | | | `sns:Publish` | Scoped to `cloudpulse-notifications` topic ARN |
-| **SimulatorFunctionRole** | `lambda.amazonaws.com` | `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:Scan` | Scoped to ResourcesTable ARN |
-| | | `cloudwatch:PutMetricData` | Scoped to `CloudPulse` namespace |
 | **RecoveryFunctionRole** | `lambda.amazonaws.com` | `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:UpdateItem`, `dynamodb:Scan`, `dynamodb:Query` | Scoped to ResourcesTable and IncidentsTable ARNs |
 | | | `cloudwatch:PutMetricData` | Scoped to `CloudPulse` namespace |
 | | | `sns:Publish` | Scoped to `cloudpulse-notifications` topic ARN |
 | | | `sqs:SendMessage` | Scoped to `RecoveryDLQ` ARN |
+| | | `ec2:RebootInstances`, `ec2:DescribeInstances` | Scoped to project tag / allowlisted EC2 instances |
+| | | `autoscaling:SetDesiredCapacity`, `autoscaling:Describe*` | Scoped to `asg-cloudpulse-fleet` |
+| | | `rds:RebootDBInstance`, `rds:DescribeDBInstances` | Scoped to `rds-cloudpulse-db` |
+| | | `ssm:SendCommand`, `ssm:GetCommandInvocation` | Scoped to `AWS-RunShellScript` and managed instances |

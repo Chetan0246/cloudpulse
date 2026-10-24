@@ -22,18 +22,16 @@ Modern cloud architectures demand high resilience and rapid incident remediation
 
 ---
 
-## 2. Academic & Architectural Boundary: Simulation vs. Real Infrastructure
+## 2. Dual-Plane Architecture: Real AWS Infrastructure & Safety Boundary
 
-> **Cardinal Project Rule (Project Constitution §2.2):**  
-> CloudPulse is an **academic simulation system**. It does **NOT** provision, mutate, stop, or destroy real AWS compute instances (EC2), managed database clusters (RDS), or networking VPCs.
+CloudPulse operates as a dual-plane cloud reliability control plane:
+- **Plane 1 (Real AWS Managed Workload Fleet):** Live AWS infrastructure deployed in region `ap-south-1` including Amazon EC2 (`i-083e8c6b1fc9ca0b7`), Auto Scaling Group (`asg-cloudpulse-fleet`), Application Load Balancer (`alb-cloudpulse-gw`), Amazon RDS PostgreSQL (`rds-cloudpulse-db`), and AWS Systems Manager (SSM Agent).
+- **Plane 2 (Autonomous Serverless Control Plane):** 100% genuine AWS serverless infrastructure (CloudWatch Alarms, EventBridge Bus, Lambda Recovery Engine, DynamoDB, SNS, SQS DLQ, API Gateway HTTP API, S3 Web Hosting).
 
-### How Simulation Operates in CloudPulse
-- **Virtual Resource Fleet:** 4 logical resources (`VM-001`, `API-001`, `DB-001`, `STORAGE-001`) are persisted as items in Amazon DynamoDB (`cloudpulse-resources-{env}`).
-- **Synthetic Metric Publishing:** Telemetry (CPU, memory, storage utilization, network latency) is computed and published as real AWS CloudWatch custom metrics under the `CloudPulse` namespace.
-- **Real AWS Event Pipeline:** While the resource instances are logical, the **entire monitoring, alerting, event routing, compute invocation, and notification pipeline is 100% genuine AWS serverless infrastructure** (CloudWatch, EventBridge, Lambda, DynamoDB, SNS, API Gateway, S3).
-- **Remediation Execution:** Self-healing strategies reset resource state and restore synthetic metrics to nominal values in DynamoDB, and publish recovery confirmation data points to CloudWatch.
-
-This design enables complete verification of distributed cloud resilience patterns, event-driven orchestration, and chaos engineering principles within AWS Free Tier limits and with zero operational risk.
+### Dual Execution Modes & Zero-Destruction Safety
+- **`HYBRID` / `REAL_AWS` Mode:** Dispatches genuine AWS SDK (`boto3`) remediation calls against registered real AWS resources (`ec2:RebootInstances`, `autoscaling:SetDesiredCapacity`, `rds:RebootDBInstance`, `ssm:SendCommand`).
+- **`SIMULATION` Mode:** Non-destructive educational digital-twin mode updating logical state records in DynamoDB and publishing synthetic metrics.
+- **`REAL_AWS_ALLOWLIST` Safety Boundary:** A mandatory environment guard strictly enforces that only explicitly allowlisted resource identifiers can be rebooted or scaled. Any unapproved AWS resources are rejected immediately, eliminating accidental disruption of untargeted infrastructure.
 
 ---
 
